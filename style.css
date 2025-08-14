@@ -92,6 +92,30 @@ header p {
     cursor: not-allowed;
 }
 
+.upload-guide {
+    background: #f8f9fa;
+    border-left: 4px solid #4facfe;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.upload-guide p {
+    margin: 0;
+    color: #495057;
+    line-height: 1.6;
+}
+
+.upload-guide p:first-child {
+    color: #2c3e50;
+    margin-bottom: 8px;
+}
+
+.upload-guide strong {
+    color: #4facfe;
+}
+
 .results-section {
     padding: 40px;
 }
@@ -387,7 +411,38 @@ header p {
 
 .student-summary {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.summary-row {
+    display: flex;
     gap: 15px;
+    flex-wrap: wrap;
+}
+
+.summary-metric-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 6px 10px;
+    border-radius: 6px;
+    min-width: fit-content;
+}
+
+.summary-metric-inline .metric-label {
+    font-size: 0.7rem;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.summary-metric-inline .metric-value {
+    font-size: 0.9rem;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .summary-metric {

@@ -188,6 +188,9 @@ class ScoreAnalyzer {
 
         // 과목별 백분위 계산
         this.calculatePercentiles();
+        
+        // 평균등급 기준 순위 계산
+        this.calculateAverageGradeRanks();
     }
 
     calculatePercentiles() {
@@ -218,17 +221,68 @@ class ScoreAnalyzer {
                 const sameRankStudents = studentsWithRanks.filter(s => s.rank === studentRank);
                 const sameRankCount = sameRankStudents.length;
                 
-                // 해당 석차보다 좋은 석차의 학생 수
-                const betterRankCount = studentsWithRanks.filter(s => s.rank < studentRank).length;
+                // 해당 석차보다 나쁜 석차의 학생 수 (석차가 높은 학생들)
+                const worseRankCount = studentsWithRanks.filter(s => s.rank > studentRank).length;
                 
-                // 백분위 계산: (더 좋은 석차 학생 수 + 동점자의 절반) / 전체 학생 수 * 100
-                const percentile = ((betterRankCount + (sameRankCount - 1) / 2) / totalStudents) * 100;
+                // 백분위 계산: (더 나쁜 석차 학생 수 + 동점자의 절반) / 전체 학생 수 * 100
+                // 이렇게 하면 1등(rank=1)이 가장 높은 백분위를 갖게 됨
+                const percentile = ((worseRankCount + (sameRankCount - 1) / 2) / totalStudents) * 100;
                 
                 // 0~100 범위로 제한하고 반올림
                 const finalPercentile = Math.max(0, Math.min(100, Math.round(percentile)));
                 
                 item.student.percentiles[subject.name] = finalPercentile;
             });
+        });
+    }
+
+    calculateAverageGradeRanks() {
+        if (!this.combinedData) return;
+
+        // 평균등급이 있는 학생들만 필터링하고 정렬
+        const studentsWithGrades = this.combinedData.students
+            .filter(student => student.weightedAverageGrade !== null && student.weightedAverageGrade !== undefined)
+            .sort((a, b) => a.weightedAverageGrade - b.weightedAverageGrade);
+
+        if (studentsWithGrades.length === 0) return;
+
+        let currentRank = 1;
+        let previousGrade = null;
+        let sameGradeCount = 0;
+
+        studentsWithGrades.forEach((student, index) => {
+            const studentGrade = student.weightedAverageGrade;
+            
+            // 이전 학생과 평균등급이 다르면 순위 업데이트
+            if (previousGrade !== null && Math.abs(studentGrade - previousGrade) >= 0.01) {
+                currentRank = index + 1;
+                sameGradeCount = 1;
+            } else if (previousGrade !== null) {
+                // 같은 등급
+                sameGradeCount++;
+            } else {
+                // 첫 번째 학생
+                sameGradeCount = 1;
+            }
+            
+            // 같은 평균등급의 학생 수 계산
+            const totalSameGrade = studentsWithGrades.filter(s => 
+                Math.abs(s.weightedAverageGrade - studentGrade) < 0.01
+            ).length;
+            
+            student.averageGradeRank = currentRank;
+            student.sameGradeCount = totalSameGrade;
+            student.totalGradedStudents = studentsWithGrades.length;
+            
+            previousGrade = studentGrade;
+        });
+
+        // 평균등급이 없는 학생들은 순위도 null로 설정
+        this.combinedData.students.forEach(student => {
+            if (student.weightedAverageGrade === null || student.weightedAverageGrade === undefined) {
+                student.averageGradeRank = null;
+                student.sameGradeCount = null;
+            }
         });
     }
 
@@ -346,6 +400,9 @@ class ScoreAnalyzer {
         // 행 10: 석차
         // 행 11: 수강자수
         
+        let consecutiveEmptyRows = 0;
+        const maxConsecutiveEmpty = 15; // 연속으로 15행이 비어있으면 종료
+        
         for (let i = 6; i < data.length; i += 5) { // 0-based로 행 7부터, 5행씩 건너뛰기
             const scoreRow = data[i];     // 합계(원점수) 행
             const achievementRow = data[i + 1]; // 성취도 행
@@ -354,7 +411,19 @@ class ScoreAnalyzer {
             const totalRow = data[i + 4];       // 수강자수 행
             
             // 학생 번호가 있는지 확인 (A열)
-            if (!scoreRow || !scoreRow[0] || isNaN(scoreRow[0])) break;
+            if (!scoreRow || !scoreRow[0] || isNaN(scoreRow[0])) {
+                consecutiveEmptyRows += 5; // 5행씩 건너뛰므로 5 증가
+                if (consecutiveEmptyRows >= maxConsecutiveEmpty) {
+                    console.log(`연속으로 ${consecutiveEmptyRows}행이 비어있어 파싱을 종료합니다. (행 ${i + 1})`);
+                    break;
+                }
+                continue; // 빈 행은 건너뛰고 다음 학생 찾기
+            }
+            
+            // 유효한 학생 데이터를 찾았으면 연속 빈 행 카운터 리셋
+            consecutiveEmptyRows = 0;
+            
+            console.log(`학생 발견: 행 ${i + 1}, 번호: ${scoreRow[0]}, 이름: ${scoreRow[1] || '미기입'}`);
             
             const student = {
                 number: scoreRow[0],
@@ -405,6 +474,8 @@ class ScoreAnalyzer {
             
             fileData.students.push(student);
         }
+        
+        console.log(`총 ${fileData.students.length}명의 학생 데이터를 파싱했습니다.`);
     }
 
     calculateWeightedAverageGrade(student, subjects) {
@@ -532,6 +603,9 @@ class ScoreAnalyzer {
             this.scatterChart.destroy();
         }
 
+        // 평균등급별로 학생을 정렬 (1등급부터 5등급 순)
+        const sortedStudents = [...students].sort((a, b) => a.weightedAverageGrade - b.weightedAverageGrade);
+        
         // 각 평균등급별로 같은 등급의 학생 수만큼 Y축에 분산
         const gradeGroups = {};
         students.forEach(student => {
@@ -542,7 +616,7 @@ class ScoreAnalyzer {
             gradeGroups[grade].push(student);
         });
 
-        const data = [];
+        const scatterData = [];
         Object.keys(gradeGroups).forEach(grade => {
             const studentsInGrade = gradeGroups[grade];
             studentsInGrade.forEach((student, index) => {
@@ -551,7 +625,7 @@ class ScoreAnalyzer {
                     ? (index - (studentsInGrade.length - 1) / 2) * 0.02 
                     : 0;
                 
-                data.push({
+                scatterData.push({
                     x: parseFloat(grade),
                     y: 0.5 + yOffset, // Y축 중앙(0.5) 기준으로 약간 분산
                     student: student
@@ -559,13 +633,56 @@ class ScoreAnalyzer {
             });
         });
 
+        // 누적 비율 계산을 위한 데이터 생성
+        const cumulativeData = [];
+        const totalStudents = sortedStudents.length;
+        
+        // 0.1 단위로 등급 구간을 나누어 누적 비율 계산
+        for (let grade = 1.0; grade <= 5.0; grade += 0.1) {
+            const studentsUpToGrade = sortedStudents.filter(s => s.weightedAverageGrade <= grade).length;
+            const cumulativePercentage = (studentsUpToGrade / totalStudents) * 100;
+            
+            cumulativeData.push({
+                x: parseFloat(grade.toFixed(1)),
+                y: cumulativePercentage
+            });
+        }
+
         this.scatterChart = new Chart(ctx, {
             type: 'scatter',
             data: {
                 datasets: [{
+                    label: '누적 비율',
+                    type: 'line',
+                    data: cumulativeData,
+                    borderColor: 'rgba(231, 76, 60, 1)',
+                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                    borderWidth: 3,
+                    pointBackgroundColor: 'rgba(231, 76, 60, 1)',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5,
+                    pointHoverRadius: 8,
+                    fill: false,
+                    tension: 0.3,
+                    yAxisID: 'y1',
+                    order: 1
+                }, {
                     label: '학생별 평균등급',
-                    data: data,
+                    type: 'scatter',
+                    data: scatterData,
                     backgroundColor: function(context) {
+                        const grade = context.parsed.x;
+                        if (grade <= 1.5) return 'rgba(26, 188, 156, 0.6)';
+                        if (grade <= 2.0) return 'rgba(52, 152, 219, 0.6)';
+                        if (grade <= 2.5) return 'rgba(155, 89, 182, 0.6)';
+                        if (grade <= 3.0) return 'rgba(241, 196, 15, 0.6)';
+                        if (grade <= 3.5) return 'rgba(230, 126, 34, 0.6)';
+                        if (grade <= 4.0) return 'rgba(231, 76, 60, 0.6)';
+                        if (grade <= 4.5) return 'rgba(189, 195, 199, 0.6)';
+                        return 'rgba(127, 140, 141, 0.6)';
+                    },
+                    borderColor: function(context) {
                         const grade = context.parsed.x;
                         if (grade <= 1.5) return 'rgba(26, 188, 156, 0.8)';
                         if (grade <= 2.0) return 'rgba(52, 152, 219, 0.8)';
@@ -576,21 +693,12 @@ class ScoreAnalyzer {
                         if (grade <= 4.5) return 'rgba(189, 195, 199, 0.8)';
                         return 'rgba(127, 140, 141, 0.8)';
                     },
-                    borderColor: function(context) {
-                        const grade = context.parsed.x;
-                        if (grade <= 1.5) return 'rgba(26, 188, 156, 1)';
-                        if (grade <= 2.0) return 'rgba(52, 152, 219, 1)';
-                        if (grade <= 2.5) return 'rgba(155, 89, 182, 1)';
-                        if (grade <= 3.0) return 'rgba(241, 196, 15, 1)';
-                        if (grade <= 3.5) return 'rgba(230, 126, 34, 1)';
-                        if (grade <= 4.0) return 'rgba(231, 76, 60, 1)';
-                        if (grade <= 4.5) return 'rgba(189, 195, 199, 1)';
-                        return 'rgba(127, 140, 141, 1)';
-                    },
-                    pointRadius: 6,
-                    pointHoverRadius: 8,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
                     borderWidth: 2,
-                    pointHoverBorderWidth: 3
+                    pointHoverBorderWidth: 3,
+                    yAxisID: 'y',
+                    order: 2
                 }]
             },
             options: {
@@ -633,14 +741,58 @@ class ScoreAnalyzer {
                         }
                     },
                     y: {
+                        type: 'linear',
                         display: false,
+                        position: 'left',
                         min: 0,
                         max: 1
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        min: 0,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: '누적 비율 (%)',
+                            font: {
+                                family: "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
+                                size: 14,
+                                weight: '600'
+                            },
+                            color: '#e74c3c'
+                        },
+                        ticks: {
+                            stepSize: 20,
+                            font: {
+                                family: "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
+                                size: 12
+                            },
+                            color: '#e74c3c',
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        },
+                        grid: {
+                            display: false
+                        }
                     }
                 },
                 plugins: {
                     legend: {
-                        display: false
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            font: {
+                                family: "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
+                                size: 13,
+                                weight: '500'
+                            },
+                            color: '#2c3e50',
+                            usePointStyle: true,
+                            padding: 20
+                        }
                     },
                     tooltip: {
                         backgroundColor: 'rgba(44, 62, 80, 0.95)',
@@ -661,18 +813,30 @@ class ScoreAnalyzer {
                         },
                         callbacks: {
                             title: function(context) {
-                                const student = context[0].raw.student;
-                                return `${student.name}`;
+                                if (context[0].datasetIndex === 0) {
+                                    // 선 그래프 (누적 비율)
+                                    return `평균등급 ${context[0].parsed.x.toFixed(1)} 이하`;
+                                } else {
+                                    // 산점도 (학생)
+                                    const student = context[0].raw.student;
+                                    return `${student.name}`;
+                                }
                             },
                             label: function(context) {
-                                return `평균등급: ${context.parsed.x.toFixed(2)}`;
+                                if (context.datasetIndex === 0) {
+                                    // 선 그래프 (누적 비율)
+                                    return `${context.parsed.y.toFixed(1)}% : ${context.parsed.x.toFixed(1)}등급`;
+                                } else {
+                                    // 산점도 (학생)
+                                    return `평균등급: ${context.parsed.x.toFixed(2)}`;
+                                }
                             }
                         }
                     }
                 },
                 interaction: {
-                    intersect: true,
-                    mode: 'point'
+                    intersect: false,
+                    mode: 'nearest'
                 },
                 animation: {
                     duration: 1000,
@@ -1020,8 +1184,13 @@ class ScoreAnalyzer {
             const studentCard = document.createElement('div');
             studentCard.className = 'student-card';
             
-            // 평균 백분위 계산
+            // 과목별 평균 백분위 계산
             const weightedAveragePercentile = this.calculateWeightedAveragePercentile(student, subjects);
+            
+            // 평균등급 기준 순위
+            const averageGradeRank = student.averageGradeRank;
+            const sameGradeCount = student.sameGradeCount;
+            const totalGradedStudents = student.totalGradedStudents;
             
             // 과목별 정보를 간단하게 표시
             let subjectsHTML = '';
@@ -1058,14 +1227,24 @@ class ScoreAnalyzer {
                         <span class="student-number">${student.grade}학년 ${student.class}반 ${student.originalNumber}번</span>
                     </div>
                     <div class="student-summary">
-                        <div class="summary-metric">
-                            <span class="metric-label">평균등급</span>
-                            <span class="metric-value">${student.weightedAverageGrade ? student.weightedAverageGrade.toFixed(2) : 'N/A'}</span>
+                        <div class="summary-row">
+                            <div class="summary-metric-inline">
+                                <span class="metric-label">평균등급</span>
+                                <span class="metric-value">${student.weightedAverageGrade ? student.weightedAverageGrade.toFixed(2) : 'N/A'}</span>
+                            </div>
+                            ${averageGradeRank !== null && averageGradeRank !== undefined ? `
+                            <div class="summary-metric-inline">
+                                <span class="metric-label">등급순위</span>
+                                <span class="metric-value">${averageGradeRank}/${totalGradedStudents}위${sameGradeCount > 1 ? ` (${sameGradeCount}명)` : ''}</span>
+                            </div>
+                            ` : ''}
                         </div>
                         ${weightedAveragePercentile ? `
-                        <div class="summary-metric">
-                            <span class="metric-label">평균백분위</span>
-                            <span class="metric-value">${weightedAveragePercentile.toFixed(1)}%</span>
+                        <div class="summary-row">
+                            <div class="summary-metric-inline">
+                                <span class="metric-label">과목평균백분위</span>
+                                <span class="metric-value">${weightedAveragePercentile.toFixed(1)}%</span>
+                            </div>
                         </div>
                         ` : ''}
                     </div>
@@ -1152,6 +1331,11 @@ class ScoreAnalyzer {
         // 학점 가중 평균 백분위 계산
         const weightedAveragePercentile = this.calculateWeightedAveragePercentile(student, this.combinedData.subjects);
         
+        // 평균등급 기준 순위
+        const averageGradeRank = student.averageGradeRank;
+        const sameGradeCount = student.sameGradeCount;
+        const totalGradedStudents = student.totalGradedStudents;
+        
         const html = `
             <div class="student-detail-header">
                 <div class="student-info">
@@ -1194,7 +1378,11 @@ class ScoreAnalyzer {
                                     <span class="summary-value highlight">${student.weightedAverageGrade ? student.weightedAverageGrade.toFixed(2) : 'N/A'}</span>
                                 </div>
                                 <div class="summary-item">
-                                    <span class="summary-label">평균 백분위</span>
+                                    <span class="summary-label">등급 순위</span>
+                                    <span class="summary-value highlight">${averageGradeRank !== null && averageGradeRank !== undefined ? `${averageGradeRank}/${totalGradedStudents}위` + (sameGradeCount > 1 ? ` (${sameGradeCount}명)` : '') : 'N/A'}</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">과목평균 백분위</span>
                                     <span class="summary-value highlight">${weightedAveragePercentile ? weightedAveragePercentile.toFixed(1) + '%' : 'N/A'}</span>
                                 </div>
                                 <div class="summary-item">
