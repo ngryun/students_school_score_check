@@ -50,7 +50,7 @@ class ScoreAnalyzer {
         });
 
         exportBtn.addEventListener('click', async () => {
-            await this.exportAsHtml(true);
+            await this.exportAggregationData();
         });
 
         tabBtns.forEach(btn => {
@@ -769,6 +769,69 @@ class ScoreAnalyzer {
             }, 1500);
             
             alert(`배포용 파일들을 다운로드하고 있습니다.\\n\\n모든 파일을 같은 폴더에 저장한 후\\nindex.html 파일을 열어서 사용하세요.`);
+        }
+    }
+
+    // Export aggregation XLS (순번, 평균등급, 평균등급(9등급환산)) without PII
+    async exportAggregationData() {
+        try {
+            if (!this.combinedData || !this.combinedData.students) {
+                this.showError('먼저 파일을 분석하세요.');
+                return;
+            }
+
+            const students = this.combinedData.students
+                .filter(s => s && s.weightedAverageGrade !== null && s.weightedAverageGrade !== undefined && !isNaN(s.weightedAverageGrade));
+
+            // Build rows: header + data
+            const header = ['순번', '평균등급', '평균등급(9등급환산)'];
+            const rows = [header];
+            students.forEach((s, i) => {
+                const avg = typeof s.weightedAverageGrade === 'number' ? Number(s.weightedAverageGrade.toFixed(2)) : '';
+                const avg9 = typeof s.weightedAverage9Grade === 'number' ? Number(s.weightedAverage9Grade.toFixed(2)) : '';
+                rows.push([i + 1, avg, avg9]);
+            });
+
+            // Create worksheet
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            // Optional: set column widths
+            ws['!cols'] = [
+                { wch: 8 }, // 순번
+                { wch: 12 }, // 평균등급
+                { wch: 18 }  // 평균등급(9등급환산)
+            ];
+
+            // Create workbook
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'DATA');
+
+            // Write as .xls (fallback to .xlsx if not supported)
+            let blob;
+            try {
+                const wbout = XLSX.write(wb, { bookType: 'xls', type: 'array' });
+                blob = new Blob([wbout], { type: 'application/vnd.ms-excel' });
+            } catch (e) {
+                // Fallback to xlsx
+                const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            }
+
+            const ts = new Date().toISOString().split('T')[0].replace(/-/g, '');
+            const a = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            a.href = url;
+            a.download = `aggregation_data_${ts}.xls`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 0);
+
+            alert(`총 ${students.length}명의 데이터가 내보내졌습니다.`);
+        } catch (error) {
+            console.error('취합용 데이터 내보내기 오류:', error);
+            alert('취합용 데이터 내보내기 중 오류가 발생했습니다: ' + error.message);
         }
     }
 
