@@ -1232,7 +1232,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     fill: false,
                     tension: 0.3,
                     yAxisID: 'y1',
-                    order: 1
+                    order: 1,
+                    // 차트 영역 경계에서 점/선이 잘리지 않도록 여유를 둠
+                    clip: 8
                 }, {
                     label: '학생별 평균등급',
                     type: 'scatter',
@@ -1264,7 +1266,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     borderWidth: 2,
                     pointHoverBorderWidth: 3,
                     yAxisID: 'y',
-                    order: 2
+                    order: 2,
+                    // 차트 영역 경계에서 점이 잘리지 않도록 여유를 둠
+                    clip: 8
                 }]
             },
             options: {
@@ -1290,11 +1294,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             },
                             color: '#2c3e50'
                         },
-                        min: 1,
-                        max: 5,
+                        // 1~5 눈금과 격자가 정확히 보이도록 범위를 고정
+                        min: 1.0,
+                        max: 5.0,
                         reverse: true,
                         ticks: {
                             stepSize: 0.5,
+                            callback: function(value) {
+                                const roundedValue = Math.round(value * 10) / 10;
+                                if (roundedValue >= 1.0 && roundedValue <= 5.0 && (roundedValue * 2) % 1 === 0) {
+                                    return roundedValue.toFixed(1);
+                                }
+                                return '';
+                            },
                             font: {
                                 family: "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
                                 size: 12
@@ -1479,7 +1491,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     borderWidth: 2,
                     borderRadius: 4,
                     borderSkipped: false,
-                    yAxisID: 'y'
+                    yAxisID: 'y',
+                    // 가장자리 막대가 잘리지 않도록 여유
+                    clip: 8
                 }, {
                     label: '누적 비율',
                     type: 'line',
@@ -1494,7 +1508,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     pointHoverRadius: 8,
                     fill: false,
                     tension: 0.2,
-                    yAxisID: 'y1'
+                    yAxisID: 'y1',
+                    // 선의 끝 점이 잘리지 않도록 여유
+                    clip: 8
                 }]
             },
             options: {
@@ -1577,16 +1593,22 @@ document.addEventListener('DOMContentLoaded', () => {
                             },
                             color: '#2c3e50'
                         },
+                        // 첫/마지막 구간에 여백을 줘서 눈금과 막대가 잘리지 않게 함
+                        offset: true,
                         ticks: {
                             font: {
                                 family: "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
                                 size: 12,
                                 weight: '500'
                             },
-                            color: '#5a6c7d'
+                            color: '#5a6c7d',
+                            maxRotation: 45,
+                            minRotation: 0
                         },
                         grid: {
-                            display: false
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.05)',
+                            lineWidth: 1
                         }
                     }
                 },
