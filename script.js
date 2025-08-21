@@ -2,6 +2,7 @@ class ScoreAnalyzer {
     constructor() {
         this.filesData = new Map(); // 파일명 -> 분석 데이터 매핑
         this.combinedData = null; // 통합된 분석 데이터
+        this.selectedFiles = null; // 사용자가 선택/드롭한 파일 목록
         this.initializeEventListeners();
 
         // If the page provides preloaded analysis data, render directly
@@ -30,20 +31,71 @@ class ScoreAnalyzer {
         const gradeSelect = document.getElementById('gradeSelect');
         const classSelect = document.getElementById('classSelect');
         const studentSelect = document.getElementById('studentSelect');
+        const studentNameSearch = document.getElementById('studentNameSearch');
         const showStudentDetail = document.getElementById('showStudentDetail');
         const tableViewBtn = document.getElementById('tableViewBtn');
         const detailViewBtn = document.getElementById('detailViewBtn');
         const printClassBtn = document.getElementById('printClassBtn');
         const pdfClassBtn = document.getElementById('pdfClassBtn');
+        const uploadSection = document.querySelector('.upload-section');
+        const fileLabel = document.querySelector('.file-input-label');
 
         fileInput.addEventListener('change', (e) => {
             const files = Array.from(e.target.files);
             if (files.length > 0) {
+                this.selectedFiles = files;
                 this.displayFileList(files);
                 analyzeBtn.disabled = false;
                 this.hideError();
             }
         });
+
+        // Drag & drop 지원 (업로드 섹션 전체)
+        if (uploadSection) {
+            const prevent = (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+            };
+            const setDragState = (on) => {
+                if (fileLabel) fileLabel.classList.toggle('dragover', on);
+                uploadSection.classList.toggle('dragover', on);
+            };
+
+            // 전역 기본 동작 방지: 페이지로 파일이 열리는 것을 방지
+            ['dragover', 'drop'].forEach(evt => {
+                window.addEventListener(evt, (ev) => {
+                    prevent(ev);
+                });
+            });
+
+            ['dragenter', 'dragover'].forEach(evt => {
+                uploadSection.addEventListener(evt, (ev) => {
+                    prevent(ev);
+                    setDragState(true);
+                });
+            });
+            ['dragleave', 'dragend'].forEach(evt => {
+                uploadSection.addEventListener(evt, (ev) => {
+                    prevent(ev);
+                    setDragState(false);
+                });
+            });
+            uploadSection.addEventListener('drop', (ev) => {
+                prevent(ev);
+                setDragState(false);
+                const dropped = Array.from(ev.dataTransfer?.files || []);
+                const files = dropped.filter(f => /\.(xlsx|xls)$/i.test(f.name));
+                if (files.length === 0) {
+                    this.showError('XLS/XLSX 파일을 드래그하여 업로드하세요.');
+                    return;
+                }
+                this.selectedFiles = files;
+                this.displayFileList(files);
+                analyzeBtn.disabled = false;
+                this.hideError();
+                try { if (fileInput) fileInput.files = ev.dataTransfer.files; } catch (_) {}
+            });
+        }
 
         analyzeBtn.addEventListener('click', () => {
             this.analyzeFiles();
@@ -75,6 +127,11 @@ class ScoreAnalyzer {
         studentSelect.addEventListener('change', () => {
             showStudentDetail.disabled = !studentSelect.value;
         });
+        if (studentNameSearch) {
+            studentNameSearch.addEventListener('input', () => {
+                this.updateStudentOptions();
+            });
+        }
 
         showStudentDetail.addEventListener('click', () => {
             this.showStudentDetail();
@@ -113,7 +170,9 @@ class ScoreAnalyzer {
 
     async analyzeFiles() {
         const fileInput = document.getElementById('excelFiles');
-        const files = Array.from(fileInput.files);
+        const files = (this.selectedFiles && this.selectedFiles.length > 0)
+            ? this.selectedFiles
+            : Array.from(fileInput.files);
         
         if (files.length === 0) {
             this.showError('파일을 선택해주세요.');
@@ -1805,9 +1864,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const gradeSelect = document.getElementById('gradeSelect');
         const classSelect = document.getElementById('classSelect');
         const studentSelect = document.getElementById('studentSelect');
+        const studentNameSearch = document.getElementById('studentNameSearch');
         
         const selectedGrade = gradeSelect.value;
         const selectedClass = classSelect.value;
+        const nameQuery = (studentNameSearch && studentNameSearch.value ? studentNameSearch.value.trim() : '');
 
         let students = this.combinedData.students;
         if (selectedGrade) {
@@ -1815,6 +1876,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (selectedClass) {
             students = students.filter(s => s.class == selectedClass);
+        }
+        if (nameQuery) {
+            const q = nameQuery.toLowerCase();
+            students = students.filter(s => (s.name && s.name.toLowerCase().includes(q)) || (s.originalNumber && String(s.originalNumber).includes(q)));
         }
 
         studentSelect.innerHTML = '<option value="">학생 선택</option>';
@@ -1824,8 +1889,14 @@ document.addEventListener('DOMContentLoaded', () => {
             option.textContent = `${student.originalNumber}번 - ${student.name}`;
             studentSelect.appendChild(option);
         });
-        
-        document.getElementById('showStudentDetail').disabled = true;
+        // 단일 매치 시 자동 선택
+        const showBtn = document.getElementById('showStudentDetail');
+        if (students.length === 1) {
+            studentSelect.value = students[0].number;
+            if (showBtn) showBtn.disabled = false;
+        } else {
+            if (showBtn) showBtn.disabled = !studentSelect.value;
+        }
     }
 
     renderStudentTable(students, subjects, container) {

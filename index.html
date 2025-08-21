@@ -23,12 +23,6 @@
         </header>
 
             <div class="upload-section">
-                <div class="file-input-wrapper">
-                    <input type="file" id="excelFiles" accept=".xlsx,.xls" multiple />
-                    <label for="excelFiles" class="file-input-label">
-                        <span>📁 XLS 파일 선택 (여러 파일 가능)</span>
-                    </label>
-                </div>
                 <div class="upload-guide">
                     <p><strong>📋 NEIS 자료 업로드 방법:</strong></p>
                     <p>성적조회/통계 → 학기말성적조회 → 학기말성적종합일람표 → <strong>XLS data</strong> 파일을 업로드하세요</p>
@@ -42,6 +36,13 @@
                         </ul>
                         <p class="privacy-footnote">즉, 업로드한 양식은 절대 외부로 유출되지 않습니다 🙂</p>
                     </div>
+                </div>
+                <div class="section-divider"></div>
+                <div class="file-input-wrapper">
+                    <input type="file" id="excelFiles" accept=".xlsx,.xls" multiple />
+                    <label for="excelFiles" class="file-input-label">
+                        <span>📁 XLS 파일 업로드 (여러 파일 가능)</span>
+                    </label>
                 </div>
                 <div id="fileList" class="file-list" style="display: none;"></div>
                 <div class="action-buttons">
@@ -115,6 +116,10 @@
                             <select id="studentSelect" class="selector">
                                 <option value="">학생 선택</option>
                             </select>
+                        </div>
+                        <div class="selector-group">
+                            <label for="studentNameSearch">이름:</label>
+                            <input id="studentNameSearch" class="selector" type="text" placeholder="이름으로 검색" />
                         </div>
                         <button id="showStudentDetail" class="detail-btn" disabled>상세 분석</button>
                         <button id="printClassBtn" class="detail-btn" title="선택한 학급 전체 인쇄">학급 전체 인쇄</button>

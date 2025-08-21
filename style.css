@@ -42,6 +42,7 @@ header p {
     padding: 40px;
     text-align: center;
     border-bottom: 1px solid #eee;
+    position: relative;
 }
 
 .file-input-wrapper {
@@ -68,6 +69,36 @@ header p {
     background: #e9ecef;
     border-color: #4facfe;
     color: #4facfe;
+}
+
+.file-input-label.dragover {
+    background: #e8f3ff;
+    border-color: #0d6efd;
+    color: #0d6efd;
+    box-shadow: 0 0 0 4px rgba(13,110,253,0.08) inset;
+}
+
+/* 업로드 섹션 전체 드래그오버 강조 및 오버레이 안내 */
+.upload-section.dragover {
+    border: 2px dashed #0d6efd;
+    border-radius: 12px;
+    background: rgba(13, 110, 253, 0.04);
+}
+.upload-section.dragover::after {
+    content: '여기에 파일을 드롭하세요';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    color: #0d6efd;
+    font-weight: 700;
+    font-size: 1.1rem;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.9);
+    border: 1px solid rgba(13,110,253,0.25);
+    border-radius: 8px;
+    pointer-events: none;
+    box-shadow: 0 8px 30px rgba(13,110,253,0.12);
 }
 
 .analyze-btn {
@@ -142,6 +173,13 @@ header p {
 
 .upload-guide strong {
     color: #4facfe;
+}
+
+.section-divider {
+    height: 1px;
+    background: linear-gradient(90deg, rgba(0,0,0,0.06), rgba(0,0,0,0.12), rgba(0,0,0,0.06));
+    margin: 16px 0 22px 0;
+    border: none;
 }
 
 .warning-text {
