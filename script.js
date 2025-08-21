@@ -3,11 +3,28 @@ class ScoreAnalyzer {
         this.filesData = new Map(); // 파일명 -> 분석 데이터 매핑
         this.combinedData = null; // 통합된 분석 데이터
         this.initializeEventListeners();
+
+        // If the page provides preloaded analysis data, render directly
+        if (window.PRELOADED_DATA) {
+            try {
+                this.combinedData = window.PRELOADED_DATA;
+                const upload = document.querySelector('.upload-section');
+                if (upload) upload.style.display = 'none';
+                const results = document.getElementById('results');
+                if (results) results.style.display = 'block';
+                this.displayResults();
+                const exportBtn = document.getElementById('exportBtn');
+                if (exportBtn) exportBtn.disabled = false;
+            } catch (e) {
+                console.error('PRELOADED_DATA 처리 중 오류:', e);
+            }
+        }
     }
 
     initializeEventListeners() {
         const fileInput = document.getElementById('excelFiles');
         const analyzeBtn = document.getElementById('analyzeBtn');
+        const exportBtn = document.getElementById('exportBtn');
         const tabBtns = document.querySelectorAll('.tab-btn');
         const studentSearch = document.getElementById('studentSearch');
         const gradeSelect = document.getElementById('gradeSelect');
@@ -28,6 +45,10 @@ class ScoreAnalyzer {
 
         analyzeBtn.addEventListener('click', () => {
             this.analyzeFiles();
+        });
+
+        exportBtn.addEventListener('click', async () => {
+            await this.exportAsHtml(true);
         });
 
         tabBtns.forEach(btn => {
@@ -104,6 +125,10 @@ class ScoreAnalyzer {
             this.combineAllData();
             this.displayResults();
             this.hideLoading();
+
+            // Enable export button after successful analysis
+            const exportBtn = document.getElementById('exportBtn');
+            if (exportBtn) exportBtn.disabled = false;
         } catch (error) {
             this.hideLoading();
             this.showError('파일 분석 중 오류가 발생했습니다: ' + error.message);
@@ -282,6 +307,11 @@ class ScoreAnalyzer {
             if (student.weightedAverageGrade === null || student.weightedAverageGrade === undefined) {
                 student.averageGradeRank = null;
                 student.sameGradeCount = null;
+            }
+            
+            // 9등급 환산 평균 계산 (기존 데이터에 없는 경우)
+            if (!student.weightedAverage9Grade) {
+                student.weightedAverage9Grade = this.calculateWeightedAverage9Grade(student, this.combinedData.subjects);
             }
         });
     }
@@ -472,6 +502,9 @@ class ScoreAnalyzer {
             // 가중평균등급 계산
             student.weightedAverageGrade = this.calculateWeightedAverageGrade(student, fileData.subjects);
             
+            // 9등급 환산 평균 계산
+            student.weightedAverage9Grade = this.calculateWeightedAverage9Grade(student, fileData.subjects);
+            
             fileData.students.push(student);
         }
         
@@ -497,6 +530,11 @@ class ScoreAnalyzer {
         let totalPercentilePoints = 0;
         let totalCredits = 0;
         
+        // percentiles와 ranks 객체가 존재하는지 확인
+        if (!student.percentiles || !student.ranks) {
+            return null;
+        }
+        
         subjects.forEach(subject => {
             const percentile = student.percentiles[subject.name];
             const rank = student.ranks[subject.name];
@@ -510,12 +548,540 @@ class ScoreAnalyzer {
         return totalCredits > 0 ? totalPercentilePoints / totalCredits : null;
     }
 
+    // 백분위를 9등급으로 환산하는 함수
+    convertPercentileTo9Grade(percentile) {
+        if (percentile === null || percentile === undefined || isNaN(percentile)) {
+            return null;
+        }
+        
+        if (percentile >= 96) return 1;  // 상위 4%
+        if (percentile >= 89) return 2;  // 상위 11%
+        if (percentile >= 77) return 3;  // 상위 23%
+        if (percentile >= 60) return 4;  // 상위 40%
+        if (percentile >= 40) return 5;  // 상위 60%
+        if (percentile >= 23) return 6;  // 상위 77%
+        if (percentile >= 11) return 7;  // 상위 89%
+        if (percentile >= 4) return 8;   // 상위 96%
+        return 9;                        // 하위 4%
+    }
+
+    // 9등급 가중평균 계산
+    calculateWeightedAverage9Grade(student, subjects) {
+        let totalGradePoints = 0;
+        let totalCredits = 0;
+        
+        // percentiles와 ranks 객체가 존재하는지 확인
+        if (!student.percentiles || !student.ranks) {
+            return null;
+        }
+        
+        subjects.forEach(subject => {
+            const percentile = student.percentiles[subject.name];
+            const rank = student.ranks[subject.name];
+            // 석차가 있는 과목만 계산에 포함
+            if (percentile !== undefined && percentile !== null && rank !== undefined && rank !== null && !isNaN(rank)) {
+                const grade9 = this.convertPercentileTo9Grade(percentile);
+                if (grade9 !== null) {
+                    totalGradePoints += grade9 * subject.credits;
+                    totalCredits += subject.credits;
+                }
+            }
+        });
+        
+        return totalCredits > 0 ? totalGradePoints / totalCredits : null;
+    }
+
 
     displayResults() {
         document.getElementById('results').style.display = 'block';
         this.displaySubjectAverages();
         this.displayGradeAnalysis();
         this.displayStudentAnalysis();
+    }
+
+    // Export a complete deployment package with all files
+    async exportAsHtml(createFolder = true) {
+        if (!this.combinedData) {
+            this.showError('먼저 파일을 분석하세요.');
+            return;
+        }
+
+        const timestamp = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const folderName = `analysis_${timestamp.getFullYear()}${pad(timestamp.getMonth()+1)}${pad(timestamp.getDate())}_${pad(timestamp.getHours())}${pad(timestamp.getMinutes())}`;
+
+        // Serialize current analysis data
+        const dataJson = JSON.stringify(this.combinedData);
+
+        // Helper to fetch text
+        const safeFetchText = async (url) => {
+            try {
+                const res = await fetch(url, { cache: 'no-cache' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return await res.text();
+            } catch (e) {
+                console.warn('리소스 로드 실패:', url, e);
+                return '';
+            }
+        };
+
+        // Get CSS content
+        let cssContent = await safeFetchText('style.css');
+        
+        // CSS 내용 확인 및 디버깅
+        console.log('CSS 내용 길이:', cssContent.length);
+        if (!cssContent || cssContent.length < 100) {
+            console.warn('CSS를 가져오지 못함, 대체 방법 사용');
+            // style 태그에서 CSS 추출 시도
+            const styleElement = document.querySelector('link[href="style.css"]');
+            if (styleElement) {
+                try {
+                    const response = await fetch(styleElement.href);
+                    cssContent = await response.text();
+                } catch (e) {
+                    console.error('CSS 대체 로드 실패:', e);
+                    // 마지막 fallback - 기본 스타일 제공
+                    cssContent = this.getFallbackCSS();
+                }
+            } else {
+                cssContent = this.getFallbackCSS();
+            }
+        }
+
+        // Get JS content and modify for standalone use
+        let jsContent = await safeFetchText('script.js');
+        console.log('JS 내용 길이:', jsContent.length);
+        if (jsContent) {
+            jsContent = this.createStandaloneScript(jsContent);
+            console.log('수정된 JS 내용 길이:', jsContent.length);
+        } else {
+            console.error('JavaScript 파일을 로드할 수 없습니다');
+            jsContent = this.getFallbackJS();
+        }
+
+        // Create HTML file content
+        const htmlContent = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>배포용 성적 분석 뷰어</title>
+    <style>
+        /* 메인 CSS */
+        ${cssContent}
+        
+        /* 차트 대체 스타일 */
+        .chart-placeholder {
+            width: 100%;
+            height: 350px;
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            flex-direction: column;
+            padding: 20px;
+        }
+        .chart-placeholder h4 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .chart-placeholder p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>성적 분석 결과 (배포용)</h1>
+            <p>업로드 없이 저장된 분석 결과를 표시합니다</p>
+            <div style="margin-top: 15px; font-size: 0.9rem; opacity: 0.8;">
+                개발 배포: 2025 강원진학센터 입시분석팀
+            </div>
+        </header>
+        <div class="upload-section" style="display:none;"></div>
+        ${document.getElementById('results') ? document.getElementById('results').outerHTML : '<div id="results" class="results-section"></div>'}
+        <div id="loading" class="loading" style="display:none;"></div>
+        <div id="error" class="error-message" style="display:none;"></div>
+    </div>
+
+    <script>
+        // Preloaded analysis data embedded for offline viewing
+        window.PRELOADED_DATA = ${dataJson};
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>`;
+
+        // Create ZIP file with JSZip (if available) or download files separately
+        if (typeof JSZip !== 'undefined' && cssContent.length > 100) {
+            // Use JSZip if available and CSS loaded successfully
+            const zip = new JSZip();
+            zip.file("index.html", htmlContent);
+            zip.file("style.css", cssContent || "/* CSS 로드 실패 */");
+            zip.file("script.js", jsContent || "/* JS 로드 실패 */");
+            zip.file("README.txt", 
+                "배포용 성적 분석 뷰어\\n" +
+                "========================\\n\\n" +
+                "사용법:\\n" +
+                "1. index.html 파일을 웹브라우저에서 열어주세요\\n" +
+                "2. 업로드 없이 바로 분석 결과를 확인할 수 있습니다\\n" +
+                "3. index.html에 CSS가 내장되어 있어 단독으로 실행 가능합니다\\n\\n" +
+                "파일 구성:\\n" +
+                "- index.html: 메인 페이지 (CSS 내장)\\n" +
+                "- style.css: 별도 스타일 파일 (참고용)\\n" +
+                "- script.js: 분석 스크립트\\n\\n" +
+                "개발: 강원진학센터 입시분석팀"
+            );
+            
+            const content = await zip.generateAsync({type: "blob"});
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = folderName + ".zip";
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 0);
+        } else {
+            // Fallback: download files separately
+            this.downloadFile(htmlContent, "index.html", "text/html");
+            setTimeout(() => this.downloadFile(cssContent, "style.css", "text/css"), 500);
+            setTimeout(() => this.downloadFile(jsContent, "script.js", "application/javascript"), 1000);
+            setTimeout(() => {
+                const readme = "배포용 성적 분석 뷰어\\n========================\\n\\n사용법:\\n1. 모든 파일을 같은 폴더에 저장하세요\\n2. index.html 파일을 웹브라우저에서 열어주세요\\n\\n개발: 강원진학센터 입시분석팀";
+                this.downloadFile(readme, "README.txt", "text/plain");
+            }, 1500);
+            
+            alert(`배포용 파일들을 다운로드하고 있습니다.\\n\\n모든 파일을 같은 폴더에 저장한 후\\nindex.html 파일을 열어서 사용하세요.`);
+        }
+    }
+
+    downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType + ';charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 0);
+    }
+
+    getFallbackCSS() {
+        // CSS 로드가 실패했을 때 사용할 기본 스타일
+        return `
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+header {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    padding: 40px;
+    text-align: center;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    font-weight: 300;
+}
+
+.results-section {
+    padding: 40px;
+}
+
+.tabs {
+    display: flex;
+    border-bottom: 2px solid #eee;
+    margin-bottom: 30px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 15px 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    color: #666;
+    transition: all 0.3s ease;
+    border-bottom: 3px solid transparent;
+}
+
+.tab-btn.active {
+    color: #4facfe;
+    border-bottom-color: #4facfe;
+    background: rgba(79, 172, 254, 0.05);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.tab-content h2 {
+    color: #333;
+    margin-bottom: 25px;
+    font-size: 1.8rem;
+    font-weight: 400;
+}
+
+.subject-averages {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.subject-item {
+    background: white;
+    border-radius: 10px;
+    padding: 25px;
+    border-left: 5px solid #4facfe;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.students-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+}
+
+.student-card {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.grade-analysis-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.chart-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 25px;
+    text-align: center;
+}
+
+.stats-section {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 25px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+`;
+    }
+
+    getFallbackJS() {
+        // JavaScript 로드가 실패했을 때 사용할 기본 스크립트
+        return `
+class ScoreAnalyzer {
+    constructor() {
+        this.combinedData = window.PRELOADED_DATA || null;
+        this.initializeEventListeners();
+        
+        if (this.combinedData) {
+            console.log('사전 로드된 데이터 발견:', this.combinedData);
+            const upload = document.querySelector('.upload-section');
+            if (upload) upload.style.display = 'none';
+            const results = document.getElementById('results');
+            if (results) results.style.display = 'block';
+            this.displayResults();
+        }
+    }
+    
+    initializeEventListeners() {
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.switchTab(e.target.dataset.tab);
+            });
+        });
+    }
+    
+    switchTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
+
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(tabName + '-tab').classList.add('active');
+    }
+    
+    displayResults() {
+        if (!this.combinedData) return;
+        
+        document.getElementById('results').style.display = 'block';
+        this.displaySubjectAverages();
+        this.displayGradeAnalysis();
+        this.displayStudentAnalysis();
+    }
+    
+    displaySubjectAverages() {
+        const container = document.getElementById('subjectAverages');
+        if (!container || !this.combinedData) return;
+        
+        container.innerHTML = '';
+        this.combinedData.subjects.forEach(subject => {
+            const div = document.createElement('div');
+            div.className = 'subject-item';
+            div.innerHTML = '<h3>' + subject.name + '</h3><p>평균: ' + (subject.average || 0).toFixed(1) + '점</p>';
+            container.appendChild(div);
+        });
+    }
+    
+    displayGradeAnalysis() {
+        // 간단한 통계만 표시
+        const overallAvg = document.getElementById('overallAverage');
+        const stdDev = document.getElementById('standardDeviation');
+        
+        if (this.combinedData && this.combinedData.students) {
+            const grades = this.combinedData.students
+                .filter(s => s.weightedAverageGrade)
+                .map(s => s.weightedAverageGrade);
+                
+            if (grades.length > 0) {
+                const avg = grades.reduce((sum, g) => sum + g, 0) / grades.length;
+                if (overallAvg) overallAvg.textContent = avg.toFixed(2);
+                
+                const variance = grades.reduce((sum, g) => sum + Math.pow(g - avg, 2), 0) / grades.length;
+                if (stdDev) stdDev.textContent = Math.sqrt(variance).toFixed(2);
+            }
+        }
+        
+        // 차트 대신 메시지 표시
+        const scatterChart = document.getElementById('scatterChart');
+        const barChart = document.getElementById('barChart');
+        
+        if (scatterChart && scatterChart.parentElement) {
+            scatterChart.parentElement.innerHTML = '<div class="chart-placeholder"><h4>차트는 배포용에서 제외됨</h4><p>통계 정보는 위에서 확인하세요</p></div>';
+        }
+        
+        if (barChart && barChart.parentElement) {
+            barChart.parentElement.innerHTML = '<div class="chart-placeholder"><h4>차트는 배포용에서 제외됨</h4><p>통계 정보는 위에서 확인하세요</p></div>';
+        }
+    }
+    
+    displayStudentAnalysis() {
+        // 기본적인 학생 목록만 표시
+        const container = document.getElementById('studentTable');
+        if (!container || !this.combinedData) return;
+        
+        container.innerHTML = '<p>학생 분석 데이터가 로드되었습니다. 총 ' + this.combinedData.students.length + '명</p>';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new ScoreAnalyzer();
+});
+`;
+    }
+
+    createStandaloneScript(originalScript) {
+        // Chart.js 의존성을 제거하고 더 안전한 방식으로 변경
+        let modifiedScript = originalScript;
+        
+        try {
+            // 1. Chart.js 관련 전역 참조 제거
+            modifiedScript = modifiedScript.replace(/Chart\.register\(.*?\);?/g, '// Chart.js 제거됨');
+            modifiedScript = modifiedScript.replace(/ChartDataLabels/g, '{}');
+            
+            // 2. 차트 생성 메서드들을 간단한 플레이스홀더로 교체
+            modifiedScript = modifiedScript.replace(
+                /createScatterChart\([^{]*\{[^}]*\{[\s\S]*?\}\s*\}\s*\}/g,
+                `createScatterChart(students) {
+                    const ctx = document.getElementById('scatterChart');
+                    if (!ctx || !ctx.parentElement) return;
+                    ctx.parentElement.innerHTML = '<div class="chart-placeholder"><h4>산점도 차트</h4><p>배포용에서는 차트가 제외되었습니다</p></div>';
+                }`
+            );
+            
+            modifiedScript = modifiedScript.replace(
+                /createGradeDistributionChart\([^{]*\{[^}]*\{[\s\S]*?\}\s*\}\s*\}/g,
+                `createGradeDistributionChart(students) {
+                    const ctx = document.getElementById('barChart');
+                    if (!ctx || !ctx.parentElement) return;
+                    ctx.parentElement.innerHTML = '<div class="chart-placeholder"><h4>분포 차트</h4><p>배포용에서는 차트가 제외되었습니다</p></div>';
+                }`
+            );
+            
+            modifiedScript = modifiedScript.replace(
+                /createStudentPercentileChart\([^{]*\{[^}]*\{[\s\S]*?\}\s*\}\s*\}/g,
+                `createStudentPercentileChart(student) {
+                    const ctx = document.getElementById('studentPercentileChart');
+                    if (!ctx || !ctx.parentElement) return;
+                    ctx.parentElement.innerHTML = '<div class="chart-placeholder"><h4>학생별 차트</h4><p>배포용에서는 차트가 제외되었습니다</p></div>';
+                }`
+            );
+            
+            // 3. 차트 파괴 관련 코드 제거
+            modifiedScript = modifiedScript.replace(/if \(this\.\w*Chart\) \{\s*this\.\w*Chart\.destroy\(\);\s*\}/g, '// 차트 파괴 코드 제거됨');
+            
+            // 4. new Chart 생성자 호출 제거
+            modifiedScript = modifiedScript.replace(/this\.\w*Chart = new Chart\([^;]*\);/g, '// Chart 생성 제거됨');
+            
+            console.log('Chart.js 의존성 제거 완료');
+            
+        } catch (e) {
+            console.error('스크립트 수정 중 오류 발생:', e);
+            console.warn('기본 fallback 스크립트 사용');
+            return this.getFallbackJS();
+        }
+        
+        return modifiedScript;
     }
 
     displaySubjectAverages() {
@@ -1254,9 +1820,7 @@ class ScoreAnalyzer {
                 </div>
                 <div class="student-card-footer">
                     <span class="grade-subjects-count">등급 산출 과목: ${hasGradeSubjects}개</span>
-                    <button class="view-detail-btn" onclick="this.closest('.students-grid').parentElement.parentElement.parentElement.querySelector('#studentSelect').value='${student.number}'; this.closest('.students-grid').parentElement.parentElement.parentElement.querySelector('#showStudentDetail').click();">
-                        상세 보기
-                    </button>
+                    <button class="view-detail-btn" data-student-id="${student.number}">상세 보기</button>
                 </div>
             `;
             
@@ -1264,6 +1828,26 @@ class ScoreAnalyzer {
         });
 
         container.appendChild(studentsGrid);
+
+        // 카드 내 상세 보기 버튼 클릭 처리 (이벤트 위임)
+        studentsGrid.addEventListener('click', (e) => {
+            const btn = e.target.closest('.view-detail-btn');
+            if (!btn) return;
+            const studentId = btn.getAttribute('data-student-id');
+            if (!studentId) return;
+
+            // 선택 박스 동기화 (선택되어 있다면)
+            const studentSelect = document.getElementById('studentSelect');
+            if (studentSelect) {
+                studentSelect.value = studentId;
+            }
+
+            const targetStudent = this.combinedData.students.find(s => s.number == studentId);
+            if (!targetStudent) return;
+
+            this.renderStudentDetail(targetStudent);
+            this.switchView('detail');
+        });
     }
 
     filterStudents(searchTerm) {
@@ -1337,6 +1921,16 @@ class ScoreAnalyzer {
         const totalGradedStudents = student.totalGradedStudents;
         
         const html = `
+            <div class="print-controls">
+                <button class="print-btn" onclick="scoreAnalyzer.printStudentDetail('${student.name}')">프린터 출력</button>
+                <button class="pdf-btn" onclick="scoreAnalyzer.generatePDF('${student.name}')">PDF 저장</button>
+            </div>
+            
+            <div class="print-header" style="display: none;">
+                <h2>학생 성적 분석 보고서</h2>
+                <div class="print-date">생성일: ${new Date().toLocaleDateString('ko-KR')}</div>
+            </div>
+            
             <div class="student-detail-header">
                 <div class="student-info">
                     <h3>${student.name}</h3>
@@ -1370,12 +1964,12 @@ class ScoreAnalyzer {
                                     <span class="summary-value">${student.grade}학년 ${student.class}반 ${student.originalNumber}번</span>
                                 </div>
                                 <div class="summary-item">
-                                    <span class="summary-label">출처</span>
-                                    <span class="summary-value">${student.fileName}</span>
-                                </div>
-                                <div class="summary-item">
                                     <span class="summary-label">평균등급</span>
                                     <span class="summary-value highlight">${student.weightedAverageGrade ? student.weightedAverageGrade.toFixed(2) : 'N/A'}</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">평균등급(9등급환산)</span>
+                                    <span class="summary-value orange">${student.weightedAverage9Grade ? student.weightedAverage9Grade.toFixed(2) : 'N/A'}</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-label">등급 순위</span>
@@ -1394,7 +1988,7 @@ class ScoreAnalyzer {
                     </div>
                     
                     <div class="chart-container">
-                        <h4>과목별 백분위(등급)</h4>
+                        <h4>과목별 등급</h4>
                         <canvas id="studentPercentileChart" width="400" height="400"></canvas>
                     </div>
                 </div>
@@ -1420,9 +2014,9 @@ class ScoreAnalyzer {
         return this.combinedData.subjects.map(subject => {
             const score = student.scores[subject.name] || 0;
             const achievement = student.achievements[subject.name] || 'N/A';
-            const grade = student.grades[subject.name];
-            const rank = student.ranks[subject.name] || 'N/A';
-            const percentile = student.percentiles[subject.name] || 0;
+            const grade = student.grades ? student.grades[subject.name] : undefined;
+            const rank = student.ranks ? student.ranks[subject.name] || 'N/A' : 'N/A';
+            const percentile = student.percentiles ? student.percentiles[subject.name] || 0 : 0;
             
             // 등급이 있는지 확인
             const hasGrade = grade !== undefined && grade !== null && grade !== 'N/A' && !isNaN(grade);
@@ -1466,6 +2060,8 @@ class ScoreAnalyzer {
                                 <span class="metric-value percentile ${percentileClass}">${percentile}%</span>
                             </div>
                             <div class="metric">
+                                <span class="metric-label">등급(9등급환산)</span>
+                                <span class="metric-value orange">${this.convertPercentileTo9Grade(percentile) || 'N/A'}등급</span>
                             </div>
                         </div>
                         <div class="percentile-bar">
@@ -1523,8 +2119,10 @@ class ScoreAnalyzer {
 
         ctx.parentElement.style.display = 'block';
         const labels = subjects.map(subject => subject.name);
-        const percentileData = subjects.map(subject => {
-            return student.percentiles[subject.name] || 0; // 이미 백분위로 계산됨
+        const gradeData = subjects.map(subject => {
+            const grade = student.grades[subject.name];
+            // 등급을 역순으로 변환 (1등급=5, 2등급=4, ..., 5등급=1)하여 차트에서 높게 표시
+            return grade ? (6 - grade) : 0;
         });
         
         this.studentPercentileChart = new Chart(ctx, {
@@ -1533,8 +2131,8 @@ class ScoreAnalyzer {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: '백분위',
-                    data: percentileData,
+                    label: '등급',
+                    data: gradeData,
                     backgroundColor: 'rgba(52, 152, 219, 0.2)',
                     borderColor: 'rgba(52, 152, 219, 1)',
                     borderWidth: 2,
@@ -1561,11 +2159,10 @@ class ScoreAnalyzer {
                         callbacks: {
                             label: function(context) {
                                 const subjectName = context.label;
-                                const percentile = context.parsed.r;
-                                // 해당 과목의 등급 찾기
-                                const subjectIndex = labels.indexOf(subjectName);
-                                const grade = subjects[subjectIndex] ? student.grades[subjects[subjectIndex].name] : 'N/A';
-                                return `${percentile}% (${grade}등급)`;
+                                const gradeValue = context.parsed.r;
+                                // 역순으로 변환된 값을 다시 등급으로 변환
+                                const grade = gradeValue > 0 ? (6 - gradeValue) : 'N/A';
+                                return `${grade}등급`;
                             }
                         }
                     },
@@ -1589,7 +2186,7 @@ class ScoreAnalyzer {
                         formatter: function(value, context) {
                             const subjectIndex = context.dataIndex;
                             const grade = subjects[subjectIndex] ? student.grades[subjects[subjectIndex].name] : 'N/A';
-                            return `${Math.round(value)}%\n(${grade}등급)`;
+                            return `${grade}등급`;
                         },
                         anchor: 'end',
                         align: 'top',
@@ -1600,13 +2197,19 @@ class ScoreAnalyzer {
                 scales: {
                     r: {
                         beginAtZero: true,
-                        max: 100,
+                        max: 5,
+                        min: 0,
                         ticks: {
-                            stepSize: 20,
+                            stepSize: 1,
                             font: {
                                 size: 12
                             },
-                            color: '#5a6c7d'
+                            color: '#5a6c7d',
+                            callback: function(value) {
+                                // 역순으로 표시 (5가 1등급, 1이 5등급)
+                                if (value === 0) return '';
+                                return `${6 - value}등급`;
+                            }
                         },
                         grid: {
                             color: 'rgba(0, 0, 0, 0.1)'
@@ -1625,6 +2228,145 @@ class ScoreAnalyzer {
                 }
             }
         });
+    }
+
+    // 프린터 출력 기능
+    printStudentDetail(studentName) {
+        try {
+            // 인쇄 전용 클래스 설정
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('print-target');
+            });
+            document.getElementById('students-tab').classList.add('print-target');
+            
+            // 프린트 헤더 표시
+            const printHeader = document.querySelector('.print-header');
+            if (printHeader) {
+                printHeader.style.display = 'block';
+            }
+            
+            // 인쇄 실행
+            window.print();
+            
+            // 인쇄 완료 후 프린트 헤더 숨기기
+            setTimeout(() => {
+                if (printHeader) {
+                    printHeader.style.display = 'none';
+                }
+            }, 1000);
+            
+        } catch (error) {
+            console.error('프린터 출력 중 오류:', error);
+            alert('프린터 출력 중 오류가 발생했습니다: ' + error.message);
+        }
+    }
+
+    // PDF 생성 기능
+    async generatePDF(studentName) {
+        try {
+            // 인쇄 전용 클래스 설정
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('print-target');
+            });
+            document.getElementById('students-tab').classList.add('print-target');
+            
+            // 잠시 기다려 레이아웃 적용
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            
+            // PDF에 포함할 요소 선택 (차트 제외)
+            const element = document.getElementById('studentDetailContent');
+            if (!element) {
+                alert('PDF 생성할 내용을 찾을 수 없습니다.');
+                return;
+            }
+
+            // 차트를 임시로 숨기기
+            const chartContainer = element.querySelector('.chart-container');
+            if (chartContainer) {
+                chartContainer.style.display = 'none';
+            }
+
+            // html2canvas로 요소를 캡처
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                width: element.scrollWidth,
+                height: element.scrollHeight,
+                useCORS: true,
+                allowTaint: true
+            });
+
+            // 차트 다시 표시
+            if (chartContainer) {
+                chartContainer.style.display = 'block';
+            }
+
+            const imgData = canvas.toDataURL('image/png');
+            
+            // PDF 크기 계산
+            const pdfWidth = 210; // A4 width in mm
+            const pdfHeight = 297; // A4 height in mm
+            const imgWidth = pdfWidth - 20; // 여백 고려
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            // 헤더 추가
+            pdf.setFontSize(20);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('학생 성적 분석 보고서', pdfWidth / 2, 20, { align: 'center' });
+            
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(`학생명: ${studentName}`, 20, 35);
+            
+            const currentDate = new Date().toLocaleDateString('ko-KR');
+            pdf.text(`생성일: ${currentDate}`, 20, 45);
+
+            // 이미지가 한 페이지에 들어가는지 확인
+            if (imgHeight <= pdfHeight - 60) {
+                // 한 페이지에 들어감
+                pdf.addImage(imgData, 'PNG', 10, 55, imgWidth, imgHeight);
+            } else {
+                // 여러 페이지로 분할
+                let position = 55;
+                let remainingHeight = imgHeight;
+                let pageNum = 1;
+
+                while (remainingHeight > 0) {
+                    const pageHeight = Math.min(remainingHeight, pdfHeight - 60);
+                    
+                    if (pageNum > 1) {
+                        pdf.addPage();
+                        position = 20;
+                    }
+
+                    pdf.addImage(
+                        imgData, 
+                        'PNG', 
+                        10, 
+                        position, 
+                        imgWidth, 
+                        pageHeight,
+                        undefined,
+                        undefined,
+                        -(imgHeight - remainingHeight) // 오프셋
+                    );
+
+                    remainingHeight -= pageHeight;
+                    pageNum++;
+                }
+            }
+
+            // PDF 다운로드
+            const fileName = `${studentName}_성적분석_${new Date().toISOString().split('T')[0]}.pdf`;
+            pdf.save(fileName);
+
+        } catch (error) {
+            console.error('PDF 생성 중 오류:', error);
+            alert('PDF 생성 중 오류가 발생했습니다: ' + error.message);
+        }
     }
 
 
@@ -1649,7 +2391,10 @@ class ScoreAnalyzer {
     }
 }
 
+// 전역 변수로 선언
+let scoreAnalyzer;
+
 // 페이지 로드 시 분석기 초기화
 document.addEventListener('DOMContentLoaded', () => {
-    new ScoreAnalyzer();
+    scoreAnalyzer = new ScoreAnalyzer();
 });
