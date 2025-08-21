@@ -1376,6 +1376,10 @@ header p {
 }
 
 /* 출력용 스타일 */
+@page {
+    size: A4 portrait;
+    margin: 10mm;
+}
 @media print {
     * {
         -webkit-print-color-adjust: exact !important;
@@ -1425,13 +1429,9 @@ header p {
         display: none !important;
     }
     
+    /* 별도 프린트 헤더는 사용하지 않음 */
     .print-header {
-        display: block !important;
-        text-align: center;
-        margin-bottom: 20px;
-        padding: 15px;
-        border-bottom: 2px solid #4facfe;
-        page-break-after: avoid;
+        display: none !important;
     }
     
     .print-header h2 {
@@ -1487,8 +1487,9 @@ header p {
         page-break-inside: avoid;
     }
     
+    /* 레이더 차트도 출력/PDF에 포함 */
     .chart-container {
-        display: none !important;
+        display: block !important;
     }
     
     .summary-card {
