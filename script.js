@@ -33,6 +33,8 @@ class ScoreAnalyzer {
         const showStudentDetail = document.getElementById('showStudentDetail');
         const tableViewBtn = document.getElementById('tableViewBtn');
         const detailViewBtn = document.getElementById('detailViewBtn');
+        const printClassBtn = document.getElementById('printClassBtn');
+        const pdfClassBtn = document.getElementById('pdfClassBtn');
 
         fileInput.addEventListener('change', (e) => {
             const files = Array.from(e.target.files);
@@ -85,6 +87,13 @@ class ScoreAnalyzer {
         detailViewBtn.addEventListener('click', () => {
             this.switchView('detail');
         });
+
+        if (printClassBtn) {
+            printClassBtn.addEventListener('click', () => this.printSelectedClass());
+        }
+        if (pdfClassBtn) {
+            pdfClassBtn.addEventListener('click', () => this.generateSelectedClassPDF());
+        }
     }
 
     displayFileList(files) {
@@ -1801,7 +1810,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <span class="subject-score">${score}점</span>
                                 ${achievement ? `<span class="subject-achievement achievement ${achievement}">${achievement}</span>` : ''}
                                 ${hasGrade ? `<span class="subject-grade">${grade}등급</span>` : ''}
-                                ${hasGrade && percentile ? `<span class="subject-percentile">${percentile}%</span>` : ''}
+                                ${hasGrade && (percentile !== undefined && percentile !== null) ? `<span class="subject-percentile">${percentile}%</span>` : ''}
                             </div>
                         </div>
                     `;
@@ -2034,6 +2043,248 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 100);
     }
 
+    // 학급 전체 인쇄용: 학생 상세 HTML 생성 (캔버스 ID 지정)
+    buildStudentDetailHTMLForPrint(student, canvasId) {
+        const weightedAveragePercentile = this.calculateWeightedAveragePercentile(student, this.combinedData.subjects);
+        const averageGradeRank = student.averageGradeRank;
+        const sameGradeCount = student.sameGradeCount;
+        const totalGradedStudents = student.totalGradedStudents;
+        return `
+            <div class="student-print-page print-area">
+                <div class="student-detail-header">
+                    <div class="student-info">
+                        <h3>${student.name}</h3>
+                        <div class="student-meta">
+                            <span class="grade-class">${student.grade}학년 ${student.class}반 ${student.originalNumber}번</span>
+                            <span class="file-info">출처: ${student.fileName}</span>
+                        </div>
+                    </div>
+                    <div class="overall-stats">
+                        <div class="stat-card">
+                            <span class="stat-label">평균등급</span>
+                            <span class="stat-value grade">${student.weightedAverageGrade ? student.weightedAverageGrade.toFixed(2) : 'N/A'}</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">전체 학생수</span>
+                            <span class="stat-value">${student.totalStudents || 'N/A'}명</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="student-detail-content">
+                    <div class="analysis-overview">
+                        <div class="student-summary">
+                            <div class="summary-card">
+                                <div class="summary-header">
+                                    <h4>학생 정보</h4>
+                                </div>
+                                <div class="summary-grid">
+                                    <div class="summary-item">
+                                        <span class="summary-label">학급</span>
+                                        <span class="summary-value">${student.grade}학년 ${student.class}반 ${student.originalNumber}번</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">평균등급</span>
+                                        <span class="summary-value highlight">${student.weightedAverageGrade ? student.weightedAverageGrade.toFixed(2) : 'N/A'}</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">평균등급(9등급환산)</span>
+                                        <span class="summary-value orange">${student.weightedAverage9Grade ? student.weightedAverage9Grade.toFixed(2) : 'N/A'}</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">등급 순위</span>
+                                        <span class="summary-value highlight">${averageGradeRank !== null && averageGradeRank !== undefined ? `${averageGradeRank}/${totalGradedStudents}위` + (sameGradeCount > 1 ? ` (${sameGradeCount}명)` : '') : 'N/A'}</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">과목평균 백분위</span>
+                                        <span class="summary-value highlight">${weightedAveragePercentile ? weightedAveragePercentile.toFixed(1) + '%' : 'N/A'}</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">전체 학생수</span>
+                                        <span class="summary-value">${student.totalStudents || 'N/A'}명</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <h4>과목별 등급</h4>
+                            <canvas id="${canvasId}" width="400" height="400"></canvas>
+                        </div>
+                    </div>
+                    <div class="subject-details">
+                        <h4>과목별 상세 분석</h4>
+                        <div class="subject-cards">
+                            ${this.renderSubjectCards(student)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 다중 생성용 차트 (저장하지 않고 즉시 렌더)
+    createStudentPercentileChartFor(canvas, student) {
+        if (!canvas) return null;
+        const subjects = this.combinedData.subjects.filter(subject => {
+            const grade = student.grades[subject.name];
+            return grade !== undefined && grade !== null && grade !== 'N/A' && !isNaN(grade);
+        });
+        if (subjects.length === 0) return null;
+        const labels = subjects.map(subject => subject.name);
+        const gradeData = subjects.map(subject => {
+            const grade = student.grades[subject.name];
+            return grade ? (6 - grade) : 0;
+        });
+        return new Chart(canvas, {
+            type: 'radar',
+            plugins: [ChartDataLabels],
+            data: {
+                labels,
+                datasets: [{
+                    label: '등급',
+                    data: gradeData,
+                    backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                    borderColor: 'rgba(52, 152, 219, 1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: 'rgba(52, 152, 219, 1)',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: false,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: true, formatter: (v, ctx) => {
+                    const idx = ctx.dataIndex;
+                    const g = subjects[idx] ? student.grades[subjects[idx].name] : 'N/A';
+                    return `${g}등급`;
+                }, color: '#2c3e50', backgroundColor: 'rgba(255,255,255,0.8)', borderColor: '#dee2e6', borderWidth: 1, borderRadius: 4, font: { size: 10 } } },
+                scales: { r: { beginAtZero: true, max: 5, min: 0, ticks: { stepSize: 1, callback: (val)=> (val===0?'':`${6-val}등급`) } } }
+            }
+        });
+    }
+
+    // 학급 전체 인쇄
+    async printSelectedClass() {
+        try {
+            const gradeSelect = document.getElementById('gradeSelect');
+            const classSelect = document.getElementById('classSelect');
+            const grade = gradeSelect.value;
+            const cls = classSelect.value;
+            if (!grade || !cls) {
+                alert('학년과 반을 선택해 주세요.');
+                return;
+            }
+            const students = this.combinedData.students.filter(s => String(s.grade) === String(grade) && String(s.class) === String(cls));
+            if (students.length === 0) {
+                alert('선택한 학급의 학생이 없습니다.');
+                return;
+            }
+
+            // 출력 영역 구성
+            let container = document.getElementById('classPrintArea');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'classPrintArea';
+                container.className = 'class-print-area';
+                document.getElementById('students-tab').appendChild(container);
+            }
+            container.innerHTML = '';
+
+            // 학생별 페이지 추가 및 차트 렌더
+            const charts = [];
+            students.forEach((student, idx) => {
+                const canvasId = `classRadar-${student.grade}-${student.class}-${student.number}-${idx}`;
+                container.insertAdjacentHTML('beforeend', this.buildStudentDetailHTMLForPrint(student, canvasId));
+            });
+            await new Promise(r => setTimeout(r, 50));
+            students.forEach((student, idx) => {
+                const canvas = document.getElementById(`classRadar-${student.grade}-${student.class}-${student.number}-${idx}`);
+                if (canvas) {
+                    const chart = this.createStudentPercentileChartFor(canvas, student);
+                    if (chart) charts.push(chart);
+                }
+            });
+
+            // 인쇄 타깃 지정 후 인쇄
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('print-target'));
+            document.getElementById('students-tab').classList.add('print-target');
+            window.print();
+
+            // 정리 (차트 파괴 및 컨테이너 비우기)
+            setTimeout(() => {
+                charts.forEach(c => { try { c.destroy(); } catch (_) {} });
+                //container.innerHTML = '';
+            }, 500);
+        } catch (err) {
+            console.error('학급 전체 인쇄 오류:', err);
+            alert('학급 전체 인쇄 중 오류가 발생했습니다: ' + err.message);
+        }
+    }
+
+    // 학급 전체 PDF
+    async generateSelectedClassPDF() {
+        try {
+            const gradeSelect = document.getElementById('gradeSelect');
+            const classSelect = document.getElementById('classSelect');
+            const grade = gradeSelect.value;
+            const cls = classSelect.value;
+            if (!grade || !cls) {
+                alert('학년과 반을 선택해 주세요.');
+                return;
+            }
+            const students = this.combinedData.students.filter(s => String(s.grade) === String(grade) && String(s.class) === String(cls));
+            if (students.length === 0) {
+                alert('선택한 학급의 학생이 없습니다.');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = 210, pdfHeight = 297;
+            const maxImgWidth = pdfWidth - 20; // 10mm 여백
+            const maxImgHeight = pdfHeight - 20; // 상하 10mm 여백
+
+            // 임시 캡처 컨테이너
+            const temp = document.createElement('div');
+            temp.style.position = 'fixed';
+            temp.style.left = '-10000px';
+            temp.style.top = '0';
+            document.body.appendChild(temp);
+
+            for (let i = 0; i < students.length; i++) {
+                const student = students[i];
+                const canvasId = `pdfRadar-${student.grade}-${student.class}-${student.number}-${i}`;
+                temp.innerHTML = this.buildStudentDetailHTMLForPrint(student, canvasId);
+                // 차트 렌더
+                await new Promise(r => setTimeout(r, 10));
+                const canvas = document.getElementById(canvasId);
+                if (canvas) this.createStudentPercentileChartFor(canvas, student);
+                await new Promise(r => setTimeout(r, 50));
+
+                const element = temp.firstElementChild;
+                const canvasImg = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true });
+                const imgData = canvasImg.toDataURL('image/png');
+                const aspect = canvasImg.width / canvasImg.height;
+                let drawWidth = maxImgWidth;
+                let drawHeight = drawWidth / aspect;
+                if (drawHeight > maxImgHeight) { drawHeight = maxImgHeight; drawWidth = drawHeight * aspect; }
+                const x = (pdfWidth - drawWidth) / 2;
+                const y = (pdfHeight - drawHeight) / 2;
+
+                if (i > 0) pdf.addPage();
+                pdf.addImage(imgData, 'PNG', x, y, drawWidth, drawHeight);
+            }
+
+            document.body.removeChild(temp);
+            const fileName = `${grade}학년_${cls}반_학생성적_${new Date().toISOString().split('T')[0]}.pdf`;
+            pdf.save(fileName);
+        } catch (err) {
+            console.error('학급 전체 PDF 생성 오류:', err);
+            alert('학급 전체 PDF 생성 중 오류가 발생했습니다: ' + err.message);
+        }
+    }
+
     renderSubjectCards(student) {
         return this.combinedData.subjects.map(subject => {
             const score = student.scores[subject.name] || 0;
@@ -2263,10 +2514,44 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             document.getElementById('students-tab').classList.add('print-target');
             
-            // 인쇄 실행
-            window.print();
+            // 인쇄 영역을 한 페이지에 맞게 스케일
+            const printArea = document.getElementById('printArea') || document.getElementById('studentDetailContent');
+            if (printArea) {
+                // mm -> px 변환요소 생성
+                const mm = document.createElement('div');
+                mm.style.width = '1mm';
+                mm.style.height = '1mm';
+                mm.style.position = 'absolute';
+                mm.style.visibility = 'hidden';
+                document.body.appendChild(mm);
+                const pxPerMM = mm.getBoundingClientRect().width || 3.78; // fallback 96dpi 기준
+                document.body.removeChild(mm);
+
+                const printableWidthPx = (210 - 20) * pxPerMM;  // 10mm 좌우 여백
+                const printableHeightPx = (297 - 20) * pxPerMM; // 10mm 상하 여백
+                const rect = printArea.getBoundingClientRect();
+                const scale = Math.min(printableWidthPx / rect.width, printableHeightPx / rect.height, 1);
+                printArea.style.setProperty('--page-scale', String(scale));
+                printArea.classList.add('apply-print-scale');
+
+                const cleanup = () => {
+                    printArea.classList.remove('apply-print-scale');
+                    printArea.style.removeProperty('--page-scale');
+                    window.removeEventListener('afterprint', cleanup);
+                };
+                window.addEventListener('afterprint', cleanup);
+                
+                // 인쇄 실행
+                window.print();
+                
+                // 일부 브라우저용 안전망
+                setTimeout(() => cleanup(), 1000);
+            } else {
+                // 기본 인쇄
+                window.print();
+            }
             
-            // 인쇄 후 별도 처리 없음 (헤더 미사용)
+            // 인쇄 후 별도 처리 없음
             
         } catch (error) {
             console.error('프린터 출력 중 오류:', error);

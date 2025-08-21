@@ -1381,6 +1381,12 @@ header p {
     margin: 10mm;
 }
 @media print {
+    .print-area {
+        transform-origin: top left !important;
+    }
+    .print-area.apply-print-scale {
+        transform: scale(var(--page-scale, 1)) !important;
+    }
     * {
         -webkit-print-color-adjust: exact !important;
         color-adjust: exact !important;
@@ -1615,6 +1621,16 @@ header p {
     
     .summary-card {
         break-inside: avoid;
+    }
+
+    /* 학급 전체 인쇄: 학생별 한 페이지씩 */
+    .class-print-area .student-print-page {
+        page-break-after: always;
+        break-after: page;
+    }
+    .class-print-area .student-print-page:last-child {
+        page-break-after: auto;
+        break-after: auto;
     }
 }
 
