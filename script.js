@@ -860,7 +860,7 @@ class ScoreAnalyzer {
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
     min-height: 100vh;
     padding: 20px;
 }
@@ -875,7 +875,7 @@ body {
 }
 
 header {
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    background: #8fbaf7;
     color: white;
     padding: 40px;
     text-align: center;
