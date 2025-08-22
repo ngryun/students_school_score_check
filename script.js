@@ -2374,7 +2374,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a4');
+            // Enable compression and lower precision to reduce memory usage
+            const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true, precision: 8 });
             const pdfWidth = 210, pdfHeight = 297;
             const maxImgWidth = pdfWidth - 20; // 10mm 여백
             const maxImgHeight = pdfHeight - 20; // 상하 10mm 여백
@@ -2393,12 +2394,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 차트 렌더
                 await new Promise(r => setTimeout(r, 10));
                 const canvas = document.getElementById(canvasId);
-                if (canvas) this.createStudentPercentileChartFor(canvas, student);
+                let chart = null;
+                if (canvas) chart = this.createStudentPercentileChartFor(canvas, student);
                 await new Promise(r => setTimeout(r, 50));
 
                 const element = temp.firstElementChild;
-                const canvasImg = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true });
-                const imgData = canvasImg.toDataURL('image/png');
+                // Use lower scale to reduce raster size and JPEG to compress
+                const canvasImg = await html2canvas(element, { scale: 1, backgroundColor: '#ffffff', useCORS: true, allowTaint: true, logging: false });
+                const imgData = canvasImg.toDataURL('image/jpeg', 0.75);
                 const aspect = canvasImg.width / canvasImg.height;
                 let drawWidth = maxImgWidth;
                 let drawHeight = drawWidth / aspect;
@@ -2407,7 +2410,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const y = (pdfHeight - drawHeight) / 2;
 
                 if (i > 0) pdf.addPage();
-                pdf.addImage(imgData, 'PNG', x, y, drawWidth, drawHeight);
+                // Add with fast compression hint to further shrink size
+                pdf.addImage(imgData, 'JPEG', x, y, drawWidth, drawHeight, undefined, 'FAST');
+
+                // Cleanup chart and temp DOM to free memory each loop
+                try { if (chart) chart.destroy(); } catch (_) {}
+                temp.innerHTML = '';
             }
 
             document.body.removeChild(temp);
@@ -2706,7 +2714,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
             
             const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true, precision: 8 });
             
             // PDF에 포함할 요소 선택 (차트 제외)
             const element = document.getElementById('printArea');
@@ -2717,15 +2725,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // html2canvas로 요소를 캡처
             const canvas = await html2canvas(element, {
-                scale: 2,
+                scale: 1,
                 backgroundColor: '#ffffff',
                 width: element.scrollWidth,
                 height: element.scrollHeight,
                 useCORS: true,
-                allowTaint: true
+                allowTaint: true,
+                logging: false
             });
 
-            const imgData = canvas.toDataURL('image/png');
+            const imgData = canvas.toDataURL('image/jpeg', 0.75);
             
             // PDF 크기 계산 (한 페이지에 맞춤)
             const pdfWidth = 210; // A4 width in mm
@@ -2744,7 +2753,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 한 페이지에 맞춰 중앙 정렬하여 배치 (상하 여백 10mm 기준)
             const x = (pdfWidth - drawWidth) / 2;
             const y = 10 + (maxImgHeight - drawHeight) / 2;
-            pdf.addImage(imgData, 'PNG', x, y, drawWidth, drawHeight);
+            pdf.addImage(imgData, 'JPEG', x, y, drawWidth, drawHeight, undefined, 'FAST');
 
             // PDF 다운로드
             const fileName = `${studentName}_성적분석_${new Date().toISOString().split('T')[0]}.pdf`;
