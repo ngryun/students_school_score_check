@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2022개정교육과정 1학년 성적 분석 프로그램</title>
+    <title>(2022개정) 고등학교 1학년 내신 분석 프로그램 Lite</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -15,39 +15,36 @@
 <body>
     <div class="container">
         <header>
-            <h1>2022개정교육과정 1학년 성적 분석 프로그램</h1>
-            <p>학기말성적종합일람표 XLS 데이터를 분석합니다</p>
-            <div style="margin-top: 15px; font-size: 0.9rem; opacity: 0.8;">
-                개발 배포: 2025 강원진학센터 입시분석팀
-            </div>
+            <h1>(2022개정) 고등학교 1학년 내신 분석 프로그램 <span class="badge-lite">Lite</span></h1>
+            
         </header>
 
             <div class="upload-section">
                 <div class="upload-guide">
                     <p><strong>📋 NEIS 자료 업로드 방법:</strong></p>
-                    <p>성적조회/통계 → 학기말성적조회 → 학기말성적종합일람표 → <strong>XLS data</strong> 파일을 업로드하세요</p>
+                    <p>성적조회/통계 → 학기말성적조회 → 학기말성적종합일람표 → <strong>XLS data</strong> 파일을 다운로드하세요</p>
                     <p class="warning-text"><strong>⚠️ 주의: <span class="xls">XLS</span> 아닙니다. <span class="xlsdata">XLS data</span> 양식을 업로드 해야합니다.</strong></p>
                     <div class="privacy-notice">
-                        <p>🔒 안전 안내</p>
+                        <p>🔒 보안 안내</p>
                         <ul>
                             <li>업로드한 성적 파일은 <strong>서버에 전송/저장되지 않습니다</strong>.</li>
                             <li>모든 분석은 <strong>사용자의 브라우저(로컬)</strong>에서만 수행됩니다.</li>
                             <li>페이지를 닫거나 새로고침하면 메모리에 남은 데이터는 사라집니다.</li>
                         </ul>
-                        <p class="privacy-footnote">즉, 업로드한 양식은 절대 외부로 유출되지 않습니다 🙂</p>
+                        <p class="privacy-footnote">즉, 업로드한 양식은 외부로 유출되지 않습니다 🙂</p>
                     </div>
                 </div>
                 <div class="section-divider"></div>
                 <div class="file-input-wrapper">
                     <input type="file" id="excelFiles" accept=".xlsx,.xls" multiple />
                     <label for="excelFiles" class="file-input-label">
-                        <span>📁 XLS 파일 업로드 (여러 파일 가능)</span>
+                        <span>엑셀 파일 업로드 (여러 파일 가능)</span>
                     </label>
+                    <div class="upload-hint">클릭 또는 드래그로 업로드</div>
                 </div>
                 <div id="fileList" class="file-list" style="display: none;"></div>
                 <div class="action-buttons">
                     <button id="analyzeBtn" class="analyze-btn" disabled>분석 시작</button>
-                    <button id="exportBtn" class="export-btn" disabled>취합용 DATA 내보내기</button>
                 </div>
             </div>
 
@@ -122,7 +119,6 @@
                             <input id="studentNameSearch" class="selector" type="text" placeholder="이름으로 검색" />
                         </div>
                         <button id="showStudentDetail" class="detail-btn" disabled>상세 분석</button>
-                        <button id="printClassBtn" class="detail-btn" title="선택한 학급 전체 인쇄">학급 전체 인쇄</button>
                         <button id="pdfClassBtn" class="detail-btn" title="선택한 학급 전체 PDF 저장">학급 전체 PDF</button>
                     </div>
                     
@@ -151,6 +147,12 @@
         </div>
 
         <div id="error" class="error-message" style="display: none;"></div>
+
+        <footer class="app-footer">
+            <div class="footer-right">
+                <div class="credits">2025 강원진학센터 입시분석팀</div>
+            </div>
+        </footer>
     </div>
 
     <script src="script.js"></script>

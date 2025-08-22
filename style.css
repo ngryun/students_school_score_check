@@ -33,6 +33,25 @@ header h1 {
     font-weight: 300;
 }
 
+.header-actions { 
+    margin-top: 16px; /* 헤더 안내 문구와 버튼 간격 확대 */
+}
+
+/* Lite 배지 스타일 */
+.badge-lite {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 4px 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #ffffff;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 999px;
+    letter-spacing: 0.3px;
+    box-shadow: 0 6px 14px rgba(118, 75, 162, 0.25);
+    vertical-align: middle;
+}
+
 header p {
     font-size: 1.1rem;
     opacity: 0.9;
@@ -63,6 +82,12 @@ header p {
     transition: all 0.3s ease;
     font-size: 1.1rem;
     color: #495057;
+}
+
+.upload-hint {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: #6c757d;
 }
 
 .file-input-label:hover {
@@ -238,6 +263,53 @@ header p {
 
 .results-section {
     padding: 40px;
+}
+
+/* 하단 크레딧 푸터 */
+.app-footer {
+    padding: 12px 40px 24px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+.app-footer .footer-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.app-footer .credits {
+    text-align: right;
+    font-size: 0.85rem;
+    color: #ffffff; /* 흰색으로 변경 */
+    opacity: 0.95;
+}
+.app-footer .credits a:not(.help-btn) {
+    color: #adb5bd;
+    text-decoration: none;
+    border-bottom: 1px dashed rgba(173,181,189,0.5);
+}
+.app-footer .credits a:not(.help-btn):hover {
+    color: #6c757d;
+    border-bottom-color: rgba(108,117,125,0.7);
+}
+
+/* 도움말 버튼 */
+.help-btn {
+    display: inline-block;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    line-height: 1;
+    border-radius: 999px;
+    color: #4facfe;
+    background: #ffffff;
+    border: 1px solid #4facfe;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+.help-btn:hover {
+    color: #ffffff;
+    background: #4facfe;
+    box-shadow: 0 6px 16px rgba(79, 172, 254, 0.25);
 }
 
 .tabs {
@@ -1513,6 +1585,37 @@ header p {
     
     .tab-content:not(.print-target) {
         display: none !important;
+    }
+
+    /* 학생 탭 인쇄 시 개인 상세 페이지만 표시 */
+    #students-tab.only-class-print > *:not(.class-print-area) {
+        display: none !important;
+    }
+
+    /* A4에 맞춘 폭 고정 및 중앙 정렬 */
+    .class-print-area {
+        width: 190mm;
+        margin: 0 auto;
+    }
+    .class-print-area .student-print-page {
+        width: 190mm;
+    }
+
+    /* 학급 전체 인쇄 모드: 더 컴팩트한 카드와 차트 크기 */
+    #students-tab.only-class-print .student-detail-header {
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+    #students-tab.only-class-print .student-info h3 {
+        font-size: 14px;
+    }
+    #students-tab.only-class-print .student-meta {
+        font-size: 11px;
+    }
+    #students-tab.only-class-print .summary-card,
+    #students-tab.only-class-print .stat-card {
+        margin-bottom: 8px;
+        padding: 10px;
     }
     
     /* 별도 프린트 헤더는 사용하지 않음 */
