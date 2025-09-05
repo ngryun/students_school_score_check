@@ -6,7 +6,7 @@
     <title>(2022개정) 고등학교 1학년 내신 분석 프로그램 Lite</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -45,6 +45,7 @@
                 <div id="fileList" class="file-list" style="display: none;"></div>
                 <div class="action-buttons">
                     <button id="analyzeBtn" class="analyze-btn" disabled>분석 시작</button>
+                    <button id="exportCsvBtn" class="analyze-btn" disabled style="margin-left: 10px;">취합용 DB 파일 생성</button>
                 </div>
             </div>
 
@@ -151,10 +152,29 @@
         <footer class="app-footer">
             <div class="footer-right">
                 <div class="credits">2025 강원진학센터 입시분석팀</div>
+                <span class="updated" id="lastUpdated"></span>
             </div>
         </footer>
     </div>
 
     <script src="script.js"></script>
+    <script>
+        (function updateLastUpdated() {
+            try {
+                const el = document.getElementById('lastUpdated');
+                if (!el) return;
+                const parts = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Seoul',
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', hour12: false
+                }).formatToParts(new Date());
+                const get = (t) => (parts.find(p => p.type === t) || {}).value || '';
+                const text = `Last updated: ${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} (KST)`;
+                el.textContent = text;
+            } catch (e) {
+                // no-op
+            }
+        })();
+    </script>
 </body>
 </html>

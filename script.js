@@ -25,7 +25,7 @@ class ScoreAnalyzer {
     initializeEventListeners() {
         const fileInput = document.getElementById('excelFiles');
         const analyzeBtn = document.getElementById('analyzeBtn');
-        const exportBtn = document.getElementById('exportBtn');
+        const exportCsvBtn = document.getElementById('exportCsvBtn');
         const tabBtns = document.querySelectorAll('.tab-btn');
         const studentSearch = document.getElementById('studentSearch');
         const gradeSelect = document.getElementById('gradeSelect');
@@ -98,6 +98,10 @@ class ScoreAnalyzer {
 
         analyzeBtn.addEventListener('click', () => {
             this.analyzeFiles();
+        });
+
+        exportCsvBtn.addEventListener('click', () => {
+            this.exportToCSV();
         });
 
         
@@ -189,8 +193,8 @@ class ScoreAnalyzer {
             this.hideLoading();
 
             // Enable export button after successful analysis
-            const exportBtn = document.getElementById('exportBtn');
-            if (exportBtn) exportBtn.disabled = false;
+            const exportCsvBtn = document.getElementById('exportCsvBtn');
+            if (exportCsvBtn) exportCsvBtn.disabled = false;
         } catch (error) {
             this.hideLoading();
             this.showError('파일 분석 중 오류가 발생했습니다: ' + error.message);
@@ -315,8 +319,8 @@ class ScoreAnalyzer {
                 // 이렇게 하면 1등(rank=1)이 가장 높은 백분위를 갖게 됨
                 const percentile = ((worseRankCount + (sameRankCount - 1) / 2) / totalStudents) * 100;
                 
-                // 0~100 범위로 제한하고 반올림
-                const finalPercentile = Math.max(0, Math.min(100, Math.round(percentile)));
+                // 0~100 범위로 제한하고 내림 처리하여 경계 상향 편향 방지
+                const finalPercentile = Math.max(0, Math.min(100, Math.floor(percentile)));
                 
                 item.student.percentiles[subject.name] = finalPercentile;
             });
@@ -545,19 +549,31 @@ class ScoreAnalyzer {
                     student.achievements[subject.name] = achievementRow[colIndex];
                 }
                 
-                // 석차등급
-                if (gradeRow && gradeRow[colIndex] && !isNaN(gradeRow[colIndex])) {
-                    student.grades[subject.name] = parseInt(gradeRow[colIndex]);
+                // 석차등급 (문자 혼입 시 숫자만 추출)
+                if (gradeRow && gradeRow[colIndex] !== undefined && gradeRow[colIndex] !== null) {
+                    const gradeText = String(gradeRow[colIndex]).trim();
+                    const gm = gradeText.match(/\d+/);
+                    if (gm) {
+                        student.grades[subject.name] = parseInt(gm[0], 10);
+                    }
                 }
-                
-                // 석차
-                if (rankRow && rankRow[colIndex] && !isNaN(rankRow[colIndex])) {
-                    student.ranks[subject.name] = parseInt(rankRow[colIndex]);
+
+                // 석차 (동석차 표기 포함 대비: 숫자만 추출)
+                if (rankRow && rankRow[colIndex] !== undefined && rankRow[colIndex] !== null) {
+                    const rankText = String(rankRow[colIndex]).trim();
+                    const rm = rankText.match(/\d+/);
+                    if (rm) {
+                        student.ranks[subject.name] = parseInt(rm[0], 10);
+                    }
                 }
-                
-                // 수강자수 (첫 번째 과목에서만 가져오기)
-                if (!student.totalStudents && totalRow && totalRow[colIndex] && !isNaN(totalRow[colIndex])) {
-                    student.totalStudents = parseInt(totalRow[colIndex]);
+
+                // 수강자수 (첫 번째 과목에서만 가져오기, 숫자만 추출)
+                if (!student.totalStudents && totalRow && totalRow[colIndex] !== undefined && totalRow[colIndex] !== null) {
+                    const totalText = String(totalRow[colIndex]).trim();
+                    const tm = totalText.match(/\d+/);
+                    if (tm) {
+                        student.totalStudents = parseInt(tm[0], 10);
+                    }
                 }
             });
 
@@ -626,6 +642,8 @@ class ScoreAnalyzer {
         if (percentile >= 4) return 8;   // 상위 96%
         return 9;                        // 하위 4%
     }
+
+    // (제거됨) 5등급 기반 9등급 하한 강제 로직은 오류 탐지 가시성을 해치므로 사용하지 않음
 
     // 9등급 가중평균 계산
     calculateWeightedAverage9Grade(student, subjects) {
@@ -768,7 +786,8 @@ class ScoreAnalyzer {
         <div id="error" class="error-message" style="display:none;"></div>
         <footer class="app-footer">
             <div class="footer-right">
-                <div class="credits">2025 강원진학센터 입시분석팀</div>
+                <div class="credits">Made by NAMGUNG YEON (Seolak high school)</div>
+                <a class="help-btn" href="https://namgungyeon.tistory.com/133" target="_blank" rel="noopener" title="도움말 보기">❔ 도움말</a>
             </div>
         </footer>
     </div>
@@ -799,7 +818,7 @@ class ScoreAnalyzer {
                 "- index.html: 메인 페이지 (CSS 내장)\\n" +
                 "- style.css: 별도 스타일 파일 (참고용)\\n" +
                 "- script.js: 분석 스크립트\\n\\n" +
-                "2025 강원진학센터 입시분석팀\\n" +
+                "Made by NAMGUNG YEON (Seolak high school)\\n" +
                 "링크: https://namgungyeon.tistory.com/133"
             );
             
@@ -820,7 +839,7 @@ class ScoreAnalyzer {
             setTimeout(() => this.downloadFile(cssContent, "style.css", "text/css"), 500);
             setTimeout(() => this.downloadFile(jsContent, "script.js", "application/javascript"), 1000);
             setTimeout(() => {
-                const readme = "배포용 성적 분석 뷰어\\n========================\\n\\n사용법:\\n1. 모든 파일을 같은 폴더에 저장하세요\\n2. index.html 파일을 웹브라우저에서 열어주세요\\n\\n2025 강원진학센터 입시분석팀\\n링크: https://namgungyeon.tistory.com/133";
+                const readme = "배포용 성적 분석 뷰어\\n========================\\n\\n사용법:\\n1. 모든 파일을 같은 폴더에 저장하세요\\n2. index.html 파일을 웹브라우저에서 열어주세요\\n\\nMade by NAMGUNG YEON (Seolak high school)\\n링크: https://namgungyeon.tistory.com/133";
                 this.downloadFile(readme, "README.txt", "text/plain");
             }, 1500);
             
@@ -2492,16 +2511,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const achievement = student.achievements[subject.name] || 'N/A';
             const grade = student.grades ? student.grades[subject.name] : undefined;
             const rank = student.ranks ? student.ranks[subject.name] || 'N/A' : 'N/A';
-            const percentile = student.percentiles ? student.percentiles[subject.name] || 0 : 0;
+            // 퍼센타일 기본값을 0으로 두지 않고, 없으면 null 처리
+            const percentile = student.percentiles && Object.prototype.hasOwnProperty.call(student.percentiles, subject.name)
+                ? student.percentiles[subject.name]
+                : null;
             
             // 등급이 있는지 확인
             const hasGrade = grade !== undefined && grade !== null && grade !== 'N/A' && !isNaN(grade);
             
             // 백분위에 따른 색상 결정 (등급이 있는 경우만)
             let percentileClass = 'low';
-            if (hasGrade && percentile >= 80) percentileClass = 'excellent';
-            else if (hasGrade && percentile >= 60) percentileClass = 'good';
-            else if (hasGrade && percentile >= 40) percentileClass = 'average';
+            if (hasGrade && percentile !== null && percentile >= 80) percentileClass = 'excellent';
+            else if (hasGrade && percentile !== null && percentile >= 60) percentileClass = 'good';
+            else if (hasGrade && percentile !== null && percentile >= 40) percentileClass = 'average';
             
             if (hasGrade) {
                 // 등급이 있는 과목: 모든 정보 표시
@@ -2533,15 +2555,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                             <div class="metric">
                                 <span class="metric-label">백분위</span>
-                                <span class="metric-value percentile ${percentileClass}">${percentile}%</span>
+                                <span class="metric-value percentile ${percentileClass}">${percentile !== null ? percentile + '%' : 'N/A'}</span>
                             </div>
                             <div class="metric">
                                 <span class="metric-label">등급(9등급환산)</span>
-                                <span class="metric-value orange">${this.convertPercentileTo9Grade(percentile) || 'N/A'}등급</span>
+                                <span class="metric-value orange">${percentile !== null ? (this.convertPercentileTo9Grade(percentile) || 'N/A') + '등급' : 'N/A'}</span>
                             </div>
                         </div>
                         <div class="percentile-bar">
-                            <div class="percentile-fill ${percentileClass}" style="width: ${percentile}%"></div>
+                            <div class="percentile-fill ${percentileClass}" style="width: ${percentile !== null ? percentile : 0}%"></div>
                         </div>
                     </div>
                 `;
@@ -2842,6 +2864,133 @@ document.addEventListener('DOMContentLoaded', () => {
 
     hideError() {
         document.getElementById('error').style.display = 'none';
+    }
+
+    exportToCSV() {
+        if (!this.combinedData || !this.combinedData.students || this.combinedData.students.length === 0) {
+            this.showError('분석된 학생 데이터가 없습니다. 먼저 분석을 진행해주세요.');
+            return;
+        }
+
+        try {
+            // CSV 헤더 생성
+            const subjects = this.combinedData.subjects;
+            const headers = [
+                '평균등급(5등급)', '평균등급(9등급환산)'
+            ];
+            
+            // 과목별 등급(5등급) 헤더 추가
+            subjects.forEach(subject => {
+                headers.push(`${subject.name}(5등급)`);
+            });
+            
+            // 과목별 등급(9등급환산) 헤더 추가  
+            subjects.forEach(subject => {
+                headers.push(`${subject.name}(9등급환산)`);
+            });
+
+            // 9등급 환산 평균 순으로 정렬 (오름차순)
+            const sortedStudents = [...this.combinedData.students].sort((a, b) => {
+                const gradeA = a.weightedAverage9Grade || 999; // null인 경우 맨 뒤로
+                const gradeB = b.weightedAverage9Grade || 999;
+                return gradeA - gradeB;
+            });
+
+            // CSV 데이터 생성
+            const csvData = [headers];
+            
+            sortedStudents.forEach(student => {
+                const row = [
+                    student.weightedAverageGrade ? student.weightedAverageGrade.toFixed(2) : '',
+                    student.weightedAverage9Grade ? student.weightedAverage9Grade.toFixed(2) : ''
+                ];
+
+                // 과목별 등급(5등급) 데이터 추가
+                subjects.forEach(subject => {
+                    const grade = student.grades[subject.name];
+                    row.push(grade || '');
+                });
+
+                // 과목별 등급(9등급환산) 데이터 추가
+                subjects.forEach(subject => {
+                    const grade = student.grades[subject.name];
+                    if (grade) {
+                        // 5등급을 9등급으로 환산
+                        const grade9 = this.convertTo9Grade(grade);
+                        row.push(grade9);
+                    } else {
+                        row.push('');
+                    }
+                });
+
+                csvData.push(row);
+            });
+
+            // CSV 문자열로 변환
+            const csvContent = csvData.map(row => 
+                row.map(field => {
+                    // 필드에 쉼표, 따옴표, 줄바꿈이 있으면 따옴표로 감싸기
+                    if (typeof field === 'string' && (field.includes(',') || field.includes('"') || field.includes('\n'))) {
+                        return '"' + field.replace(/"/g, '""') + '"';
+                    }
+                    return field;
+                }).join(',')
+            ).join('\n');
+
+            // BOM을 추가하여 한글이 제대로 표시되도록 함
+            const BOM = '\uFEFF';
+            const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+            // 파일 다운로드
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            
+            // 파일명 생성 (현재 날짜 포함)
+            const now = new Date();
+            const dateStr = now.getFullYear() + 
+                           String(now.getMonth() + 1).padStart(2, '0') + 
+                           String(now.getDate()).padStart(2, '0') + '_' +
+                           String(now.getHours()).padStart(2, '0') + 
+                           String(now.getMinutes()).padStart(2, '0');
+            
+            link.setAttribute('download', `학생성적분석_취합데이터_${dateStr}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            console.log(`CSV 파일이 생성되었습니다. 총 ${this.combinedData.students.length}명의 학생 데이터가 포함됩니다.`);
+
+        } catch (error) {
+            this.showError('CSV 파일 생성 중 오류가 발생했습니다: ' + error.message);
+            console.error('CSV export error:', error);
+        }
+    }
+
+    // 5등급을 9등급으로 환산하는 메소드
+    convertTo9Grade(grade5) {
+        if (!grade5 || grade5 < 1 || grade5 > 5) return '';
+        
+        // 5등급 → 9등급 환산표
+        const conversionTable = {
+            1: [1, 2],      // 1등급 → 1,2등급
+            2: [3, 4],      // 2등급 → 3,4등급  
+            3: [5, 6],      // 3등급 → 5,6등급
+            4: [7, 8],      // 4등급 → 7,8등급
+            5: [9]          // 5등급 → 9등급
+        };
+        
+        const range = conversionTable[grade5];
+        if (!range) return '';
+        
+        // 범위의 중간값 반환 (예: [1,2] → 1.5, [9] → 9)
+        if (range.length === 1) {
+            return range[0];
+        } else {
+            return (range[0] + range[1]) / 2;
+        }
     }
 }
 

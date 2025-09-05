@@ -293,6 +293,13 @@ header p {
     border-bottom-color: rgba(108,117,125,0.7);
 }
 
+/* last updated 표시 */
+.app-footer .updated {
+    font-size: 0.8rem;
+    color: #adb5bd;
+    margin-left: 8px;
+}
+
 /* 도움말 버튼 */
 .help-btn {
     display: inline-block;
