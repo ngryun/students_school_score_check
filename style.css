@@ -1606,6 +1606,10 @@ header p {
     }
     .class-print-area .student-print-page {
         width: 190mm;
+        transform-origin: top left !important;
+    }
+    .class-print-area .student-print-page.apply-print-scale {
+        transform: scale(var(--page-scale, 1)) !important;
     }
 
     /* 학급 전체 인쇄 모드: 더 컴팩트한 카드와 차트 크기 */
