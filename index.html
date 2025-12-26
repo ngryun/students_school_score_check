@@ -13,6 +13,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
+    <!-- 눈 내리는 효과 -->
+    <div class="snowflakes" aria-hidden="true">
+        <div class="snowflake">❄</div>
+        <div class="snowflake">❅</div>
+        <div class="snowflake">❆</div>
+        <div class="snowflake">❄</div>
+        <div class="snowflake">❅</div>
+        <div class="snowflake">❆</div>
+        <div class="snowflake">❄</div>
+        <div class="snowflake">❅</div>
+        <div class="snowflake">❆</div>
+        <div class="snowflake">❄</div>
+    </div>
+
     <div class="container">
         <header>
             <h1>(2022개정) 고등학교 1학년 내신 분석 프로그램 <span class="badge-lite">Lite</span></h1>
@@ -150,13 +164,27 @@
 
         <div id="error" class="error-message" style="display: none;"></div>
 
-        <footer class="app-footer">
-            <div class="footer-right">
-                <div class="credits">2025 강원진학센터 입시분석팀</div>
-                <span class="updated" id="lastUpdated"></span>
-            </div>
-        </footer>
-    </div>
+	        <footer class="app-footer">
+	            <div class="footer-right">
+	                <div class="credits credits-team" tabindex="0" aria-label="2025 강원진학센터 입시분석팀 (구성원 보기)">
+	                    2025 강원진학센터 입시분석팀
+	                    <div class="credits-tooltip" role="tooltip">
+	                        <div>원주여고 김신우</div>
+	                        <div>강릉명륜고 원광연</div>
+	                        <div>강원사대부고 김재림</div>
+	                        <div>대성고 고준희</div>
+	                        <div>화천고 박상근</div>
+	                        <div>설악고 남궁연</div>
+	                    </div>
+		                </div>
+		                <span class="updated" id="lastUpdated"></span>
+		                <span class="help-btn help-tooltip" tabindex="0" aria-label="문의 정보 보기">
+		                    문의
+		                    <span class="help-tooltip-content" role="tooltip">문의: 설악고_남궁연</span>
+		                </span>
+		            </div>
+		        </footer>
+	    </div>
 
     <script src="script.js"></script>
     <script>
