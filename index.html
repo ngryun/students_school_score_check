@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>(2022개정) 고등학교 1학년 내신 분석 프로그램 Lite</title>
+    <title>(2022개정) 고등학교 내신 분석 프로그램 Lite</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
@@ -13,45 +13,40 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
-    <!-- 눈 내리는 효과 -->
-    <div class="snowflakes" aria-hidden="true">
-        <div class="snowflake">❄</div>
-        <div class="snowflake">❅</div>
-        <div class="snowflake">❆</div>
-        <div class="snowflake">❄</div>
-        <div class="snowflake">❅</div>
-        <div class="snowflake">❆</div>
-        <div class="snowflake">❄</div>
-        <div class="snowflake">❅</div>
-        <div class="snowflake">❆</div>
-        <div class="snowflake">❄</div>
-    </div>
-
     <div class="container">
         <header>
-            <h1>(2022개정) 고등학교 1학년 내신 분석 프로그램 <span class="badge-lite">Lite</span></h1>
-            
+            <div class="header-copy">
+                <h1>(2022개정) 고등학교 내신 분석 프로그램 <span class="badge-lite">Lite<span class="badge-lite-tooltip">서버 없이 브라우저에서 동작하는 경량 버전</span></span></h1>
+                <p class="header-subtitle">2026 강원진학센터 입시분석팀</p>
+            </div>
+            <img
+                class="brand-bi"
+                src="logo_img/BI_가로조합.png"
+                alt="모두가 빛나는 강원교육"
+            >
         </header>
 
             <div class="upload-section">
                 <div class="upload-guide">
-                    <p><strong>📋 NEIS 자료 업로드 방법:</strong></p>
-                    <p>성적조회/통계 → 학기말성적조회 → 학기말성적종합일람표→ <strong>XLS data</strong> 파일을 다운로드하세요(1,2학기모두)</p>
-                    <p class="warning-text"><strong>⚠️ 주의: <span class="xls">XLS</span> 아닙니다. <span class="xlsdata">XLS data</span> 양식을 업로드 해야합니다.</strong></p>
+                    <p class="guide-title">NEIS 자료 업로드 방법</p>
+                    <p><strong>(학기초)</strong> 학교생활기록부 → 학생부 항목별 조회 → 교과학습발달상황 → 교과학습발달상황 → 디스켓 버튼 → <strong>XLS data</strong></p>
+                    <p><strong>(학기종료 후)</strong> 성적조회/통계 → 학기말성적조회 → 학기말성적종합일람표 → <strong>XLS data</strong> 파일</p>
+                    <p class="warning-text"><strong><span class="xls">XLS</span>가 아니라 <span class="xlsdata">XLS data</span> 양식을 업로드해야 합니다.</strong></p>
                     <div class="privacy-notice">
-                        <p>🔒 보안 안내</p>
+                        <p>보안 안내</p>
                         <ul>
                             <li>업로드한 성적 파일은 <strong>서버에 전송/저장되지 않습니다</strong>.</li>
                             <li>모든 분석은 <strong>사용자의 브라우저(로컬)</strong>에서만 수행됩니다.</li>
                             <li>페이지를 닫거나 새로고침하면 메모리에 남은 데이터는 사라집니다.</li>
                         </ul>
-                        <p class="privacy-footnote">즉, 업로드한 양식은 외부로 유출되지 않습니다 🙂</p>
+                        <p class="privacy-footnote">즉, 업로드한 데이터는 외부로 전송되지 않습니다.</p>
                     </div>
                 </div>
                 <div class="section-divider"></div>
                 <div class="file-input-wrapper">
                     <input type="file" id="excelFiles" accept=".xlsx,.xls" multiple />
                     <label for="excelFiles" class="file-input-label">
+                        <span class="upload-icon">&#128194;</span>
                         <span>엑셀 파일 업로드 (여러 파일 가능)</span>
                     </label>
                     <div class="upload-hint">클릭 또는 드래그로 업로드</div>
@@ -59,24 +54,32 @@
                 <div id="fileList" class="file-list" style="display: none;"></div>
                 <div class="action-buttons">
                     <button id="analyzeBtn" class="analyze-btn" disabled>분석 시작</button>
-                    <button id="exportCsvBtn" class="analyze-btn" disabled style="margin-left: 10px;">취합용 DB 파일 생성</button>
-                    <button id="exportHtmlBtn" class="analyze-btn" disabled style="margin-left: 10px;">분석결과 HTML 저장</button>
                 </div>
             </div>
 
         <div id="results" class="results-section" style="display: none;">
-            <div class="tabs">
-                <button class="tab-btn active" data-tab="subjects">과목별 분석</button>
-                <button class="tab-btn" data-tab="grade-analysis">평균등급 분포</button>
-                <button class="tab-btn" data-tab="students">학생별 분석</button>
+            <div id="analysisSummaryBanner"></div>
+            <div class="results-export-bar">
+                <button id="exportCsvBtn" class="analyze-btn secondary-btn" disabled>취합용 DB 파일 생성</button>
+                <button id="exportHtmlBtn" class="analyze-btn secondary-btn" disabled>분석결과 HTML 저장</button>
+                <label class="rank-visibility-toggle" for="rankVisibilityToggle">
+                    <input type="checkbox" id="rankVisibilityToggle" checked>
+                    <span class="rank-visibility-switch" aria-hidden="true"></span>
+                    <span class="rank-visibility-text">순위 표시</span>
+                </label>
+            </div>
+            <div class="tabs" role="tablist">
+                <button class="tab-btn active" data-tab="subjects" role="tab" aria-selected="true" aria-controls="subjects-tab">과목별 분석</button>
+                <button class="tab-btn" data-tab="grade-analysis" role="tab" aria-selected="false" aria-controls="grade-analysis-tab">평균등급 분포</button>
+                <button class="tab-btn" data-tab="students" role="tab" aria-selected="false" aria-controls="students-tab">학생별 분석</button>
             </div>
 
-            <div id="subjects-tab" class="tab-content active">
+            <div id="subjects-tab" class="tab-content active" role="tabpanel">
                 <h2>과목별 분석</h2>
                 <div id="subjectAverages" class="subject-averages"></div>
             </div>
 
-            <div id="grade-analysis-tab" class="tab-content">
+            <div id="grade-analysis-tab" class="tab-content" role="tabpanel">
                 <h2>평균등급 분포 분석</h2>
                 <div class="grade-analysis-container">
                     <div class="chart-section">
@@ -108,7 +111,7 @@
                 </div>
             </div>
 
-            <div id="students-tab" class="tab-content">
+            <div id="students-tab" class="tab-content" role="tabpanel">
                 <h2>학생별 분석</h2>
                 <div id="studentAnalysis" class="student-analysis">
                     <div class="student-selector">
@@ -144,9 +147,6 @@
                     </div>
                     
                     <div id="tableView" class="table-view">
-                        <div class="search-box">
-                            <input type="text" id="studentSearch" placeholder="학생 번호 또는 이름으로 검색...">
-                        </div>
                         <div id="studentTable" class="student-table"></div>
                     </div>
                     
@@ -159,33 +159,27 @@
 
         <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
-            <p>분석 중...</p>
+            <p id="loadingText">분석 중...</p>
+            <div class="loading-progress">
+                <div class="progress-bar-container">
+                    <div id="loadingProgressBar" class="progress-bar-fill"></div>
+                </div>
+                <div id="loadingProgressText" class="progress-text"></div>
+            </div>
         </div>
 
         <div id="error" class="error-message" style="display: none;"></div>
 
-	        <footer class="app-footer">
-	            <div class="footer-right">
-	                <div class="credits credits-team" tabindex="0" aria-label="2025 강원진학센터 입시분석팀 (구성원 보기)">
-	                    2025 강원진학센터 입시분석팀
-	                    <div class="credits-tooltip" role="tooltip">
-	                        <div>원주여고 김신우</div>
-	                        <div>강릉명륜고 원광연</div>
-	                        <div>강원사대부고 김재림</div>
-	                        <div>대성고 고준희</div>
-	                        <div>화천고 박상근</div>
-	                        <div>설악고 남궁연</div>
-	                    </div>
-		                </div>
-		                <span class="updated" id="lastUpdated"></span>
-		                <span class="help-btn help-tooltip" tabindex="0" aria-label="문의 정보 보기">
-		                    문의
-		                    <span class="help-tooltip-content" role="tooltip">문의: 이음톡 남궁연</span>
-		                </span>
-		            </div>
-		        </footer>
-	    </div>
+        <footer class="app-footer">
+            <div class="footer-right">
+                <div class="credits">2026 강원진학센터 입시분석팀 남궁연(강원 설악고등학교)</div>
+                <span class="updated" id="lastUpdated"></span>
+                <button class="help-btn" id="inAppHelpBtn" type="button" title="도움말 보기">도움말</button>
+            </div>
+        </footer>
+    </div>
 
+    <div id="toastContainer" class="toast-container"></div>
     <script src="script.js"></script>
     <script>
         (function updateLastUpdated() {
